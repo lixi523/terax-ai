@@ -37,7 +37,7 @@ jobs:
             artifact_name: terax-macos-arm64
             binary_name: terax
 
-steps:
+    steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
@@ -78,14 +78,14 @@ steps:
           releaseName: 'Terax ${{ github.ref_name }}'
           releaseBody: |
             ## Terax ${{ github.ref_name }}
-            
+
             Lightweight Terminal-first AI-native dev workspace.
-            
+
             ### Changes
             - i18n support (English, Simplified Chinese)
             - Runtime language switching
             - All settings panels localized
-            
+
             ### Download
             See assets below for your platform.
           args: --target ${{ matrix.target }}
@@ -100,11 +100,12 @@ steps:
             src-tauri/target/${{ matrix.target }}/release/bundle/**/*
             src-tauri/target/${{ matrix.target }}/release/${{ matrix.binary_name }}
           retention-days: 30
+
   release:
     name: Create Release
     needs: build
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/')
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
     steps:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
@@ -119,14 +120,14 @@ steps:
           name: Terax ${{ github.ref_name }}
           body: |
             ## Terax ${{ github.ref_name }}
-            
+
             Lightweight Terminal-first AI-native dev workspace.
-            
+
             ### Changes
             - i18n support (English, Simplified Chinese)
             - Runtime language switching
             - All settings panels localized
-            
+
             ### Download
             See assets below for your platform.
           files: artifacts/**/*
