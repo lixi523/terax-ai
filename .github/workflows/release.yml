@@ -37,17 +37,11 @@ jobs:
             artifact_name: terax-macos-arm64
             binary_name: terax
 
-    steps:
+steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'pnpm'
-
-- name: Setup pnpm
+      - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
           version: 9
@@ -106,7 +100,6 @@ jobs:
             src-tauri/target/${{ matrix.target }}/release/bundle/**/*
             src-tauri/target/${{ matrix.target }}/release/${{ matrix.binary_name }}
           retention-days: 30
-
   release:
     name: Create Release
     needs: build
