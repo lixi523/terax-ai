@@ -133,8 +133,14 @@ export default defineConfig(async ({ mode }): Promise<UserConfig> => ({
             id.includes("/scheduler/")
           )
             return "react";
+          // Radix primitives must stay in the react chunk. Splitting them
+          // created a react <-> radix chunk cycle, and rolldown resolved the
+          // duplication by emitting TWO copies of the React runtime — the
+          // settings window then crashed on render with React error #300
+          // ("rendered more hooks than during the previous render") and the
+          // window stayed blank.
           if (id.includes("@radix-ui/") || id.includes("/radix-ui/"))
-            return "radix";
+            return "react";
 
           return null;
         },
