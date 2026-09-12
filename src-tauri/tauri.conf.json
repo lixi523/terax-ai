@@ -46,7 +46,6 @@
       "../src/modules/terminal/ghostty/webgl/LICENSE.xterm-js": "licenses/terminal/xterm-js.txt"
     },
     "targets": "all",
-    "createUpdaterArtifacts": true,
     "copyright": "Copyright 2026 Crynta",
     "license": "Apache-2.0",
     "publisher": "Crynta",
