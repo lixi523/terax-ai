@@ -11,7 +11,11 @@ if (USE_CUSTOM_WINDOW_CONTROLS) {
   document.documentElement.dataset.chrome = "borderless";
 }
 
-await initI18n();
+try {
+  await initI18n();
+} catch (e) {
+  console.error("settings: i18n init failed", e);
+}
 
 ReactDOM.createRoot(
   document.getElementById("settings-root") as HTMLElement,
