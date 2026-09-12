@@ -13,29 +13,9 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build:
-    name: Build ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: windows-latest
-            target: x86_64-pc-windows-msvc
-            artifact_name: terax-windows
-            binary_name: terax.exe
-          - os: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
-            artifact_name: terax-linux
-            binary_name: terax
-          - os: macos-latest
-            target: x86_64-apple-darwin
-            artifact_name: terax-macos
-            binary_name: terax
-          - os: macos-latest
-            target: aarch64-apple-darwin
-            artifact_name: terax-macos-arm64
-            binary_name: terax
+  build-windows:
+    name: Build Windows
+    runs-on: windows-latest
 
     steps:
       - name: Checkout repository
@@ -55,18 +35,12 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.target }}
+          targets: x86_64-pc-windows-msvc
 
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
         with:
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-
-      - name: Install system dependencies (Ubuntu)
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libssl-dev pkg-config
+          key: windows-cargo-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
@@ -86,57 +60,17 @@ jobs:
 
             Lightweight Terminal-first AI-native dev workspace.
 
-            ### Changes
-            - i18n support (English, Simplified Chinese)
-            - Runtime language switching
-            - All settings panels localized
-
             ### Download
-            See assets below for your platform.
-          args: --target ${{ matrix.target }}
+            See assets below for Windows installer.
+          args: --target x86_64-pc-windows-msvc
           includeUpdater: true
           appId: com.terax.app
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.artifact_name }}
+          name: terax-windows
           path: |
-            src-tauri/target/${{ matrix.target }}/release/bundle/**/*
-            src-tauri/target/${{ matrix.target }}/release/${{ matrix.binary_name }}
+            src-tauri/target/x86_64-pc-windows-msvc/release/bundle/**/*
+            src-tauri/target/x86_64-pc-windows-msvc/release/terax.exe
           retention-days: 30
-
-  release:
-    name: Create Release
-    needs: build
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
-    steps:
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: artifacts
-          merge-multiple: true
-
-      - name: Create Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ github.ref_name }}
-          name: Terax ${{ github.ref_name }}
-          body: |
-            ## Terax ${{ github.ref_name }}
-
-            Lightweight Terminal-first AI-native dev workspace.
-
-            ### Changes
-            - i18n support (English, Simplified Chinese)
-            - Runtime language switching
-            - All settings panels localized
-
-            ### Download
-            See assets below for your platform.
-          files: artifacts/**/*
-          draft: false
-          prerelease: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
