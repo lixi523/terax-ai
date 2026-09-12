@@ -63,8 +63,6 @@ jobs:
             ### Download
             See assets below for Windows installer.
           args: --target x86_64-pc-windows-msvc
-          includeUpdater: true
-          appId: com.terax.app
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
