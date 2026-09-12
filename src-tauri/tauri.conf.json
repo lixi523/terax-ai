@@ -115,11 +115,5 @@
       }
     ]
   },
-  "plugins": {
-    "updater": {
-      "endpoints": [
-        "https://github.com/lixi523/terax-ai/releases/latest/download/latest.json"
-      ]
-    }
-  }
+  "plugins": {}
 }
