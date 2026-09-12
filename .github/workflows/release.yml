@@ -89,7 +89,6 @@ jobs:
             ### Download
             See assets below for your platform.
           args: --target ${{ matrix.target }}
-        with:
           includeUpdater: true
           appId: com.terax.app
 
