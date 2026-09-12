@@ -559,6 +559,12 @@
         "agentFinished": "Agent finished",
         "error": "Error",
         "info": "Info"
+      },
+      "statusBar": {
+        "openAiCompatible": "OpenAI Compatible",
+        "noFavorites": "No favorites yet — star a model to pin it here.",
+        "noRecentModels": "No recently-used models.",
+        "noModelsMatch": "No models match."
       }
     },
     "preview": {
@@ -650,14 +656,6 @@
       "noWslDistros": "No WSL distros found",
       "refresh": "Refresh",
       "openAiAgent": "Open AI agent"
-    },
-    "ai": {
-      "statusBar": {
-        "openAiCompatible": "OpenAI Compatible",
-        "noFavorites": "No favorites yet — star a model to pin it here.",
-        "noRecentModels": "No recently-used models.",
-        "noModelsMatch": "No models match."
-      }
     }
   }
 }

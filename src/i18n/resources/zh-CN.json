@@ -559,6 +559,12 @@
         "agentFinished": "智能体已完成",
         "error": "错误",
         "info": "信息"
+      },
+      "statusBar": {
+        "openAiCompatible": "OpenAI 兼容",
+        "noFavorites": "暂无收藏 — 点击星标将模型固定在此处。",
+        "noRecentModels": "暂无最近使用的模型。",
+        "noModelsMatch": "无匹配的模型。"
       }
     },
     "preview": {
@@ -650,14 +656,6 @@
       "noWslDistros": "未找到 WSL 发行版",
       "refresh": "刷新",
       "openAiAgent": "打开 AI 智能体"
-    },
-    "ai": {
-      "statusBar": {
-        "openAiCompatible": "OpenAI 兼容",
-        "noFavorites": "暂无收藏 — 点击星标将模型固定在此处。",
-        "noRecentModels": "暂无最近使用的模型。",
-        "noModelsMatch": "无匹配的模型。"
-      }
     }
   }
 }

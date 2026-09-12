@@ -373,7 +373,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   editorCustomFormatCommand: "",
   lspActivation: {},
   lspCustomServers: [],
-  locale: "system",
+  locale: "zh-CN",
 };
 
 const store = new LazyStore(STORE_PATH, { defaults: {}, autoSave: 200 });
