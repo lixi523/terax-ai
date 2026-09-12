@@ -377,6 +377,15 @@
       "autoSaveDelayDescription": "未保存的更改自动保存前的延迟时间。"
     },
     "terminal": {
+    "tabs": {
+      "general": "通用",
+      "editor": "编辑器",
+      "themes": "主题",
+      "shortcuts": "快捷键",
+      "models": "模型",
+      "agents": "智能体",
+      "about": "关于"
+    },
       "shell": "Shell",
       "fontSize": "字体大小",
       "fontFamily": "字体",
@@ -657,5 +666,30 @@
       "refresh": "刷新",
       "openAiAgent": "打开 AI 智能体"
     }
+  },
+  "themes": {
+    "title": "主题",
+    "description": "选择内置主题或管理自定义主题。",
+    "customThemes": "自定义主题",
+    "importTheme": "导入主题",
+    "create": "新建",
+    "micaBackground": "Mica 背景",
+    "micaDescription": "使用 Windows Mica 材质作为窗口背景。",
+    "vibrancy": "鲜活效果",
+    "vibrancyDescription": "使用 macOS 鲜活效果作为窗口背景。"
+  },
+  "shortcuts": {
+    "title": "键盘快捷键",
+    "description": "查看并自定义键盘快捷键。",
+    "search": "搜索快捷键",
+    "unassigned": "未分配",
+    "clearShortcut": "清除快捷键",
+    "recording": "正在录制…",
+    "recordingHint": "按下要使用的组合键。按 Esc 取消。",
+    "resetToDefault": "恢复默认",
+    "resetAll": "全部重置",
+    "resetAllTitle": "重置所有快捷键",
+    "resetAllDescription": "这会将所有快捷键恢复为默认绑定。自定义绑定将会丢失。",
+    "resetAllConfirm": "重置"
   }
 }

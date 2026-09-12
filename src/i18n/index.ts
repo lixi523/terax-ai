@@ -1,6 +1,8 @@
 import i18next from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import enJson from './resources/en.json';
+import zhCNJson from './resources/zh-CN.json';
+import { getInitialLanguage } from './detector';
 
 let i18nInitialized = false;
 let initPromise: Promise<void> | null = null;
@@ -23,8 +25,8 @@ const NAMESPACE_MAP: Record<string, string> = {
   'settings.general': 'settings.general',
   'settings.editor': 'settings.editor',
   'settings.shell': 'settings.terminal',
-  'themes': 'common',
-  'shortcuts': 'common',
+  'themes': 'themes',
+  'shortcuts': 'shortcuts',
   'ai': 'settings.ai',
   'header.window': 'header.window',
   'header.search': 'header.search',
@@ -85,14 +87,15 @@ function buildResourcesFromJson(json: Record<string, any>) {
 }
 
 const enResources = buildResources(enJson);
+const zhCNResources = buildResourcesFromJson(zhCNJson);
 
+// i18next's inline `resources` option only accepts plain objects. A previous
+// attempt used an async factory for zh-CN here, which i18next silently treats
+// as an empty namespace — every zh-CN lookup fell back to English.
 const resources = {
   en: enResources,
-  'zh-CN': async () => {
-    const mod = await import('./resources/zh-CN.json');
-    return buildResourcesFromJson(mod.default);
-  },
-} as any;
+  'zh-CN': zhCNResources,
+};
 
 export async function initI18n(): Promise<void> {
   if (i18nInitialized) {
@@ -104,7 +107,7 @@ export async function initI18n(): Promise<void> {
       .use(initReactI18next)
       .init({
         resources,
-        lng: 'zh-CN',
+        lng: getInitialLanguage(),
         fallbackLng: 'en',
         defaultNS: 'settings.general',
         ns: Object.keys(enResources),

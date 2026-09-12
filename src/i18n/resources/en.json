@@ -377,6 +377,15 @@
       "autoSaveDelayDescription": "Delay before unsaved changes are saved automatically."
     },
     "terminal": {
+    "tabs": {
+      "general": "General",
+      "editor": "Editor",
+      "themes": "Themes",
+      "shortcuts": "Shortcuts",
+      "models": "Models",
+      "agents": "Agents",
+      "about": "About"
+    },
       "shell": "Shell",
       "fontSize": "Font size",
       "fontFamily": "Font family",
@@ -657,5 +666,30 @@
       "refresh": "Refresh",
       "openAiAgent": "Open AI agent"
     }
+  },
+  "themes": {
+    "title": "Themes",
+    "description": "Choose a bundled theme or manage your custom themes.",
+    "customThemes": "Custom themes",
+    "importTheme": "Import theme",
+    "create": "Create",
+    "micaBackground": "Mica background",
+    "micaDescription": "Use the Windows Mica material as the window backdrop.",
+    "vibrancy": "Vibrancy",
+    "vibrancyDescription": "Use the macOS vibrancy effect as the window backdrop."
+  },
+  "shortcuts": {
+    "title": "Keyboard shortcuts",
+    "description": "View and customize keyboard shortcuts.",
+    "search": "Search shortcuts",
+    "unassigned": "Unassigned",
+    "clearShortcut": "Clear shortcut",
+    "recording": "Recording…",
+    "recordingHint": "Press the key combination you want to use. Esc cancels.",
+    "resetToDefault": "Reset to default",
+    "resetAll": "Reset all",
+    "resetAllTitle": "Reset all shortcuts",
+    "resetAllDescription": "This restores every shortcut to its default binding. Custom bindings will be lost.",
+    "resetAllConfirm": "Reset"
   }
 }

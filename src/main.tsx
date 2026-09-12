@@ -27,7 +27,14 @@ await invoke("pty_close_all").catch(() => {});
 await initLaunchDir();
 
 // Initialize i18n AFTER Tauri async setup, BEFORE React render to avoid FOUC.
-await initI18n();
+// A failure here must not abort the top-level await chain — the window starts
+// hidden and only becomes visible after React paints, so an unhandled rejection
+// would leave the installed app permanently blank.
+try {
+  await initI18n();
+} catch (e) {
+  console.error("main: i18n init failed", e);
+}
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <App />,

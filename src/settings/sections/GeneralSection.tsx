@@ -9,6 +9,7 @@ import {
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
+import { changeLanguage } from "@/i18n";
 import {
   type OsNotificationResult,
   testAgentOsNotification,
@@ -211,7 +212,15 @@ export function GeneralSection() {
           title={t('appLanguage')}
           description={t('appLanguageDescription')}
         >
-          <Select value={locale} onValueChange={(value) => void setLocale(value as "system" | "en" | "zh-CN")}>
+          <Select value={locale} onValueChange={(value) => {
+            void setLocale(value as "system" | "en" | "zh-CN");
+            // Persisting to the store alone doesn't switch the UI — apply it
+            // to i18next immediately (falls back to zh-CN for "system").
+            const resolved = value === "system"
+              ? (navigator.language || "en").startsWith("zh") ? "zh-CN" : "en"
+              : value;
+            void changeLanguage(resolved);
+          }}>
             <SelectTrigger className="h-8 w-40 text-[12px]">
               <SelectValue />
             </SelectTrigger>
