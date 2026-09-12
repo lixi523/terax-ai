@@ -47,8 +47,10 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { SectionHeader } from "../components/SectionHeader";
 import { SettingRow } from "../components/SettingRow";
+import { useTranslation } from "@/i18n";
 
 export function ThemesSection() {
+  const { t } = useTranslation('themes');
   const { themeId, setThemeId, resolvedMode, customThemes } = useTheme();
   const builtinThemes = listBuiltinThemes();
   const themes = useMemo(
@@ -156,17 +158,17 @@ export function ThemesSection() {
   return (
     <div className="flex flex-col gap-6">
       <SectionHeader
-        title="Themes"
-        description="Theme, background image, and customization."
+        title={t('title')}
+        description={t('description')}
       />
 
       {backdrop === "none" ? null : (
         <SettingRow
-          title={backdrop === "mica" ? "Mica background" : "Window vibrancy"}
+          title={backdrop === "mica" ? t('micaBackground') : t('vibrancy')}
           description={
             backdrop === "mica"
-              ? "Blend the header, status bar and gutters into the desktop wallpaper. Windows 11 only."
-              : "Frost the header, status bar and gutters over what is behind the window. Panes stay solid."
+              ? t('micaDescription')
+              : t('vibrancyDescription')
           }
         >
           <Switch
@@ -189,7 +191,7 @@ export function ThemesSection() {
         }}
       >
         <div className="flex items-center justify-between">
-          <Label>Theme</Label>
+          <Label>{t('customThemes')}</Label>
           <div className="flex items-center gap-1.5">
             <Button
               variant="outline"
@@ -198,7 +200,7 @@ export function ThemesSection() {
               onClick={onCreateTheme}
             >
               <HugeiconsIcon icon={PlusSignIcon} size={11} strokeWidth={2} />
-              Create
+              {t('create')}
             </Button>
             <Button
               variant="outline"
@@ -206,7 +208,7 @@ export function ThemesSection() {
               className="h-7 px-2 text-[11px]"
               onClick={onPickThemeFile}
             >
-              Import .terax-theme
+              {t('importTheme')}
             </Button>
           </div>
           <input

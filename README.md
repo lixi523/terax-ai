@@ -165,6 +165,11 @@ Tauri 2, Rust, `portable-pty`, React 19, TypeScript, Vite, xterm.js, CodeMirror 
 
 Issues and PRs are welcome! Feel free to open issues, suggest features, or submit pull requests. See [CONTRIBUTING.md](CONTRIBUTING.md) and the [architecture docs](docs/README.md) for more details.
 
+### Architecture guides
+
+- [i18n implementation plan](docs/architecture/i18n-implementation-plan.md) — multi-language support design & migration strategy
+  - [简体中文版](docs/architecture/i18n-implementation-plan.zh-CN.md)
+
 ## Code signing
 
 <a href="https://signpath.org"><img src="https://avatars.githubusercontent.com/u/34448643?s=200&v=4" width="80" alt="SignPath" align="left" /></a>

@@ -60,6 +60,7 @@ import { ACCEPTED_FILES, useComposer } from "../lib/composer";
 import { toggleFavoriteModel } from "../lib/modelPrefs";
 import { useChatStore } from "../store/chatStore";
 import { usePreferencesStore } from "@/modules/settings/preferences";
+import { useTranslation } from "@/i18n";
 
 const PROVIDER_ICON = {
   openai: ChatGptIcon,
@@ -78,6 +79,7 @@ const PROVIDER_ICON = {
 } as const satisfies Record<ProviderId, typeof ChatGptIcon>;
 
 export function AiOpenButton({ onOpen }: { onOpen: () => void }) {
+  const { t } = useTranslation('statusBar');
   return (
     <button
       type="button"
@@ -87,9 +89,9 @@ export function AiOpenButton({ onOpen }: { onOpen: () => void }) {
         "text-muted-foreground transition-colors hover:border-border hover:bg-accent hover:text-foreground",
         "animate-in slide-in-from-top-2 duration-200 ease-out",
       )}
-      title="Open AI agent"
+      title={t('openAiAgent')}
     >
-      <span>Open AI agent</span>
+      <span>{t('openAiAgent')}</span>
       <Kbd className="h-4 min-w-4 px-1">{fmtShortcut(MOD_KEY, "I")}</Kbd>
     </button>
   );

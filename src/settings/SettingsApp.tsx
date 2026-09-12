@@ -22,47 +22,48 @@ import { GeneralSection } from "./sections/GeneralSection";
 import { ModelsSection } from "./sections/ModelsSection";
 import { ShortcutsSection } from "./sections/ShortcutsSection";
 import { ThemesSection } from "./sections/ThemesSection";
+import { useTranslation } from "@/i18n";
 
 const TABS: {
   id: SettingsTab;
-  label: string;
+  labelKey: string;
   icon: typeof Settings01Icon;
   component: () => JSX.Element;
 }[] = [
   {
     id: "general",
-    label: "General",
+    labelKey: "settings.shell.tabs.general",
     icon: Settings01Icon,
     component: GeneralSection,
   },
   {
     id: "editor",
-    label: "Editor",
+    labelKey: "settings.shell.tabs.editor",
     icon: SourceCodeIcon,
     component: EditorSection,
   },
   {
     id: "themes",
-    label: "Themes",
+    labelKey: "settings.shell.tabs.themes",
     icon: PaintBoardIcon,
     component: ThemesSection,
   },
   {
     id: "shortcuts",
-    label: "Shortcuts",
+    labelKey: "settings.shell.tabs.shortcuts",
     icon: KeyboardIcon,
     component: ShortcutsSection,
   },
-  { id: "models", label: "Models", icon: AiScanIcon, component: ModelsSection },
+  { id: "models", labelKey: "settings.shell.tabs.models", icon: AiScanIcon, component: ModelsSection },
   {
     id: "agents",
-    label: "Agents",
+    labelKey: "settings.shell.tabs.agents",
     icon: UserMultiple02Icon,
     component: AgentsSection,
   },
   {
     id: "about",
-    label: "About",
+    labelKey: "settings.shell.tabs.about",
     icon: InformationCircleIcon,
     component: AboutSection,
   },
@@ -89,6 +90,7 @@ function readInitialTab(): SettingsTab {
 }
 
 export function SettingsApp() {
+  const { t } = useTranslation('settings.shell');
   const [active, setActive] = useState<SettingsTab>(readInitialTab);
   const init = usePreferencesStore((s) => s.init);
   const ActiveSection = TABS.find((t) => t.id === active)?.component;
@@ -132,14 +134,14 @@ export function SettingsApp() {
           data-tauri-drag-region
         >
           <TabsList className="mx-auto h-7 bg-muted/40 px-2">
-            {TABS.map((t) => (
+            {TABS.map((tab) => (
               <TabsTrigger
-                key={t.id}
-                value={t.id}
+                key={tab.id}
+                value={tab.id}
                 className="h-6 gap-1.5 px-2.5 text-[11.5px]"
               >
-                <HugeiconsIcon icon={t.icon} size={12} strokeWidth={1.75} />
-                <span>{t.label}</span>
+                <HugeiconsIcon icon={tab.icon} size={12} strokeWidth={1.75} />
+                <span>{t(tab.labelKey)}</span>
               </TabsTrigger>
             ))}
           </TabsList>

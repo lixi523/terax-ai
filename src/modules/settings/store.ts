@@ -185,6 +185,7 @@ export type Preferences = {
   editorCustomFormatCommand: string;
   lspActivation: Record<string, LspActivation>;
   lspCustomServers: LspCustomServer[];
+  locale: "system" | "en" | "zh-CN";
 };
 
 export type EditorFormatter =
@@ -279,6 +280,7 @@ const KEY_EDITOR_FORMATTER_BY_LANG = "editorFormatterByLang";
 const KEY_EDITOR_CUSTOM_FORMAT_COMMAND = "editorCustomFormatCommand";
 const KEY_LSP_ACTIVATION = "lspActivation";
 const KEY_LSP_CUSTOM_SERVERS = "lspCustomServers";
+const KEY_LOCALE = "locale";
 
 export const TERMINAL_FONT_SIZE_DEFAULT = 14;
 export const TERMINAL_FONT_SIZE_MIN = 8;
@@ -371,6 +373,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   editorCustomFormatCommand: "",
   lspActivation: {},
   lspCustomServers: [],
+  locale: "system",
 };
 
 const store = new LazyStore(STORE_PATH, { defaults: {}, autoSave: 200 });
@@ -576,6 +579,9 @@ export async function loadPreferences(): Promise<Preferences> {
     lspCustomServers:
       get<LspCustomServer[]>(KEY_LSP_CUSTOM_SERVERS) ??
       DEFAULT_PREFERENCES.lspCustomServers,
+    locale:
+      get<"system" | "en" | "zh-CN">(KEY_LOCALE) ??
+      DEFAULT_PREFERENCES.locale,
   };
 }
 
@@ -596,6 +602,10 @@ export async function setLspCustomServers(
   value: LspCustomServer[],
 ): Promise<void> {
   await writePref(KEY_LSP_CUSTOM_SERVERS, value);
+}
+
+export async function setLocale(value: "system" | "en" | "zh-CN"): Promise<void> {
+  await writePref(KEY_LOCALE, value);
 }
 
 export async function setTheme(value: ThemePref): Promise<void> {

@@ -1,0 +1,8 @@
+{
+  "in": "src/i18n/resources",
+  "out": "src/i18n/types.d.ts",
+  "defaultNamespace": "translation",
+  "indent": 2,
+  "typeName": "TranslationKeys",
+  "quoteChar": "'"
+}

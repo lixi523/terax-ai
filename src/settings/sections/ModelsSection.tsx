@@ -92,6 +92,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ProviderIcon } from "../components/ProviderIcon";
 import { ProviderKeyCard } from "../components/ProviderKeyCard";
 import { SectionHeader } from "../components/SectionHeader";
+import { useTranslation } from "@/i18n";
 
 type KeysMap = Record<ProviderId, string | null>;
 
@@ -104,54 +105,52 @@ type LocalMeta = {
   modelHint: React.ReactNode;
 };
 
-const LOCAL_META: Partial<Record<ProviderId, LocalMeta>> = {
-  lmstudio: {
-    urlPlaceholder: "http://localhost:1234/v1",
-    modelPlaceholder: "qwen2.5-coder-7b-instruct",
-    description:
-      "Run GGUF models via LM Studio's HTTP server (Developer tab → enable).",
-    modelHint: (
-      <>
-        The model id loaded in LM Studio — see the server's{" "}
-        <span className="font-mono">/v1/models</span> page.
-      </>
-    ),
-  },
-  mlx: {
-    urlPlaceholder: "http://127.0.0.1:8080/v1",
-    modelPlaceholder: "mlx-community/Qwen2.5-Coder-7B-Instruct-4bit",
-    description:
-      "Apple-silicon inference via mlx_lm.server (pip install mlx-lm).",
-    modelHint: <>The Hugging Face repo path you launched mlx_lm.server with.</>,
-  },
-  ollama: {
-    urlPlaceholder: "http://localhost:11434/v1",
-    modelPlaceholder: "qwen2.5-coder:7b",
-    description: "Local models via Ollama's built-in OpenAI-compatible API.",
-    modelHint: <>The model name from `ollama list` / `ollama pull`.</>,
-  },
-  "openai-compatible": {
-    urlPlaceholder: "https://api.example.com/v1",
-    modelPlaceholder: "gpt-4o, qwen3-max, glm-4.6, …",
-    description: "Any OpenAI-compatible endpoint — vLLM, Z.AI, Fireworks, etc.",
-    modelHint: null,
-  },
-  openrouter: {
-    urlPlaceholder: "",
-    modelPlaceholder: "anthropic/claude-sonnet-5, openai/gpt-5.6, …",
-    description: "Any model on OpenRouter — type its full provider/model id.",
-    modelHint: (
-      <>
-        Browse ids at <span className="font-mono">openrouter.ai/models</span>.
-      </>
-    ),
-  },
-};
-
 export function ModelsSection() {
+  const { t } = useTranslation('ai');
   const [keys, setKeys] = useState<KeysMap | null>(null);
   const [epKeys, setEpKeys] = useState<CustomEndpointKeys>({});
   const [adding, setAdding] = useState<Set<ProviderId>>(new Set());
+
+  const LOCAL_META: Partial<Record<ProviderId, LocalMeta>> = {
+    lmstudio: {
+      urlPlaceholder: "http://localhost:1234/v1",
+      modelPlaceholder: "qwen2.5-coder-7b-instruct",
+      description: t('lmstudioDescription'),
+      modelHint: (
+        <>
+          {t('lmstudioModelHint')}
+        </>
+      ),
+    },
+    mlx: {
+      urlPlaceholder: "http://127.0.0.1:8080/v1",
+      modelPlaceholder: "mlx-community/Qwen2.5-Coder-7B-Instruct-4bit",
+      description: t('mlxDescription'),
+      modelHint: <> {t('mlxModelHint')} </>,
+    },
+    ollama: {
+      urlPlaceholder: "http://localhost:11434/v1",
+      modelPlaceholder: "qwen2.5-coder:7b",
+      description: t('ollamaDescription'),
+      modelHint: <> {t('ollamaModelHint')} </>,
+    },
+    "openai-compatible": {
+      urlPlaceholder: "https://api.example.com/v1",
+      modelPlaceholder: "gpt-4o, qwen3-max, glm-4.6, …",
+      description: t('openaiCompatibleDescription'),
+      modelHint: null,
+    },
+    openrouter: {
+      urlPlaceholder: "",
+      modelPlaceholder: "anthropic/claude-sonnet-5, openai/gpt-5.6, …",
+      description: t('openrouterDescription'),
+      modelHint: (
+        <>
+          {t('openrouterModelHint')}
+        </>
+      ),
+    },
+  };
 
   const defaultModel = usePreferencesStore((s) => s.defaultModelId);
   const lmstudioBaseURL = usePreferencesStore((s) => s.lmstudioBaseURL);
@@ -356,8 +355,8 @@ export function ModelsSection() {
   return (
     <div className="flex flex-col gap-7">
       <SectionHeader
-        title="Models"
-        description="Connect the providers you use. Keys live in your OS keychain and are used only by Terax."
+        title={t('modelsTitle')}
+        description={t('modelsDescription')}
       />
 
       <DefaultsBlock
@@ -371,7 +370,7 @@ export function ModelsSection() {
 
       <div className="flex flex-col gap-3">
         <div className="flex items-center justify-between">
-          <Label>Providers</Label>
+          <Label>{t('providersTitle')}</Label>
           <AddProviderMenu
             providers={addableProviders}
             onAdd={addProvider}
@@ -382,10 +381,10 @@ export function ModelsSection() {
         {visibleProviders.length === 0 && customEndpoints.length === 0 ? (
           <div className="rounded-lg border border-dashed border-border/60 bg-card/40 px-4 py-8 text-center">
             <p className="text-[12px] text-muted-foreground">
-              No providers connected yet.
+              {t('noProvidersConnected')}
             </p>
             <p className="mt-0.5 text-[10.5px] text-muted-foreground/70">
-              Click "Add provider" to connect a cloud or local model source.
+              {t('addProviderNote')}
             </p>
           </div>
         ) : (

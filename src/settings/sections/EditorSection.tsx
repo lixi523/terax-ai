@@ -39,10 +39,12 @@ import { useEffect, useState } from "react";
 import { LspServersGroup } from "../components/LspServersGroup";
 import { SectionHeader } from "../components/SectionHeader";
 import { SettingRow } from "../components/SettingRow";
+import { useTranslation } from "@/i18n";
 
 const AUTO_SAVE_STEP = 100;
 
 export function EditorSection() {
+  const { t } = useTranslation('settings.editor');
   const editorFontSize = usePreferencesStore((s) => s.editorFontSize);
   const vimMode = usePreferencesStore((s) => s.vimMode);
   const editorWordWrap = usePreferencesStore((s) => s.editorWordWrap);
@@ -63,13 +65,13 @@ export function EditorSection() {
   return (
     <div className="flex flex-col gap-6">
       <SectionHeader
-        title="Editor"
-        description="Editing behavior, saving, and language servers."
+        title={t('title')}
+        description={t('description')}
       />
 
       <div className="flex flex-col gap-2">
-        <Label>Appearance</Label>
-        <SettingRow title="Font size" description="Code editor text size.">
+        <Label>{t('appearance')}</Label>
+        <SettingRow title={t('fontSize')} description={t('fontSizeDescription')}>
           <Select
             value={String(editorFontSize)}
             onValueChange={(v) => void setEditorFontSize(Number(v))}
@@ -84,7 +86,7 @@ export function EditorSection() {
                   value={String(size)}
                   className="text-[12px]"
                 >
-                  {size} px
+                  {size} {t('px')}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -93,10 +95,10 @@ export function EditorSection() {
       </div>
 
       <div className="flex flex-col gap-2">
-        <Label>Editing</Label>
+        <Label>{t('editing')}</Label>
         <SettingRow
-          title="Vim mode"
-          description="Enable Vim keybindings in the code editor."
+          title={t('vimMode')}
+          description={t('vimModeDescription')}
         >
           <Switch
             checked={vimMode}
@@ -104,8 +106,8 @@ export function EditorSection() {
           />
         </SettingRow>
         <SettingRow
-          title="Word wrap"
-          description="Wrap long lines instead of scrolling horizontally."
+          title={t('wordWrap')}
+          description={t('wordWrapDescription')}
         >
           <Switch
             checked={editorWordWrap}
@@ -121,10 +123,10 @@ export function EditorSection() {
       </div>
 
       <div className="flex flex-col gap-2">
-        <Label>Saving</Label>
+        <Label>{t('saving')}</Label>
         <SettingRow
-          title="Auto save"
-          description="Automatically save files after a delay when changes are detected."
+          title={t('autoSave')}
+          description={t('autoSaveDescription')}
         >
           <Switch
             checked={editorAutoSave}
@@ -138,8 +140,8 @@ export function EditorSection() {
           />
         )}
         <SettingRow
-          title="Format on save"
-          description="Format the file on explicit save (Cmd+S / :w) with the formatter below."
+          title={t('formatOnSave')}
+          description={t('formatOnSaveDescription')}
         >
           <Switch
             checked={editorFormatOnSave}
@@ -149,8 +151,8 @@ export function EditorSection() {
         {editorFormatOnSave && (
           <>
             <SettingRow
-              title="Formatter"
-              description="Language server formats the buffer before writing; external tools run on the saved file from your PATH."
+              title={t('formatter')}
+              description={t('externalToolsDescription')}
             >
               <FormatterSelect
                 value={editorFormatter}
@@ -198,6 +200,7 @@ function FormatterSelect({
 }
 
 function CustomFormatCommandInput() {
+  const { t } = useTranslation('settings.editor');
   const stored = usePreferencesStore((s) => s.editorCustomFormatCommand);
   const [draft, setDraft] = useState(stored);
 
@@ -207,8 +210,8 @@ function CustomFormatCommandInput() {
 
   return (
     <SettingRow
-      title="Custom command"
-      description="Runs on the saved file; {file} is replaced with the quoted path (appended when omitted)."
+      title={t('customCommand')}
+      description={t('customCommandDescription')}
     >
       <Input
         value={draft}
@@ -227,6 +230,7 @@ function CustomFormatCommandInput() {
 }
 
 function FormatterOverrides() {
+  const { t } = useTranslation('settings.editor');
   const byLang = usePreferencesStore((s) => s.editorFormatterByLang);
   const entries = Object.entries(byLang);
   const unused = EXPOSED_LANGUAGES.filter((l) => !(l.ext in byLang));
@@ -237,8 +241,8 @@ function FormatterOverrides() {
   return (
     <>
       <SettingRow
-        title="Language overrides"
-        description="Use a different formatter for specific languages (e.g. Ruff for Python)."
+        title={t('languageOverrides')}
+        description={t('languageOverridesDescription')}
       >
         <button
           type="button"
@@ -249,7 +253,7 @@ function FormatterOverrides() {
             if (first) update({ ...byLang, [first.ext]: "lsp" });
           }}
         >
-          Add override
+          {t('addOverride')}
         </button>
       </SettingRow>
       {entries.map(([lang, formatter]) => (
@@ -287,7 +291,7 @@ function FormatterOverrides() {
           <button
             type="button"
             className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
-            title="Remove override"
+            title={t('removeOverride')}
             onClick={() => {
               const next = { ...byLang };
               delete next[lang];
@@ -317,6 +321,7 @@ function AutoSaveDelayInput({
   value: number;
   onChange: (v: number) => void;
 }) {
+  const { t } = useTranslation('settings.editor');
   const [draft, setDraft] = useState(String(value));
 
   useEffect(() => {
@@ -336,8 +341,8 @@ function AutoSaveDelayInput({
 
   return (
     <SettingRow
-      title="Auto save delay"
-      description="Delay before unsaved changes are saved automatically."
+      title={t('autoSaveDelay')}
+      description={t('autoSaveDelayDescription')}
     >
       <div className="flex items-center gap-2">
         <Input
@@ -355,7 +360,7 @@ function AutoSaveDelayInput({
           }}
           className="h-8 w-20 rounded-md border border-border bg-background px-2.5 text-right text-[12px] md:text-[12px] tabular-nums outline-none focus:border-foreground/40 focus-visible:ring-0 focus-visible:border-foreground/40 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
         />
-        <span className="text-[11px] text-muted-foreground">ms</span>
+        <span className="text-[11px] text-muted-foreground">{t('ms')}</span>
       </div>
     </SettingRow>
   );
@@ -368,6 +373,7 @@ function WordWrapColumnInput({
   value: number;
   onChange: (v: number) => void;
 }) {
+  const { t } = useTranslation('settings.editor');
   const [draft, setDraft] = useState(String(value));
 
   useEffect(() => {
@@ -387,8 +393,8 @@ function WordWrapColumnInput({
 
   return (
     <SettingRow
-      title="Wrap column"
-      description="Soft-wrap at this column, or earlier when the editor is narrower."
+      title={t('wrapColumn')}
+      description={t('wrapColumnDescription')}
     >
       <div className="flex items-center gap-2">
         <Input
@@ -404,7 +410,7 @@ function WordWrapColumnInput({
           }}
           className="h-8 w-20 rounded-md border border-border bg-background px-2.5 text-right text-[12px] md:text-[12px] tabular-nums outline-none focus:border-foreground/40 focus-visible:ring-0 focus-visible:border-foreground/40 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
         />
-        <span className="text-[11px] text-muted-foreground">columns</span>
+        <span className="text-[11px] text-muted-foreground">{t('columns')}</span>
       </div>
     </SettingRow>
   );

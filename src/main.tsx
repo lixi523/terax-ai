@@ -7,6 +7,7 @@ import App from "./app/App";
 import { initLaunchDir } from "./lib/launchDir";
 import { USE_CUSTOM_WINDOW_CONTROLS } from "./lib/platform";
 import { terminalDiagnosticsEnabled } from "@/modules/terminal/lib/terminalDiagnosticsEnabled";
+import { initI18n } from "@/i18n";
 
 if (USE_CUSTOM_WINDOW_CONTROLS) {
   document.documentElement.dataset.chrome = "borderless";
@@ -24,6 +25,9 @@ await invoke("pty_close_all").catch(() => {});
 
 // Seed before first paint so default tab mounts at target cwd (no flicker).
 await initLaunchDir();
+
+// Initialize i18n AFTER Tauri async setup, BEFORE React render to avoid FOUC.
+await initI18n();
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <App />,
