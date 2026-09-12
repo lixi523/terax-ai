@@ -91,6 +91,7 @@ jobs:
           args: --target ${{ matrix.target }}
         with:
           includeUpdater: true
+          appId: com.terax.app
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
