@@ -120,26 +120,19 @@ impl ShellSession {
     }
 }
 
-fn wrap_posix_with_sentinel(command: &str, sentinel: &str) -> String {
+fn wrap_with_sentinel(command: &str, workspace: &WorkspaceEnv, sentinel: &str) -> String {
+    if workspace.is_wsl() {
+        return wrap_wsl_with_sentinel(command, sentinel);
+    }
     format!(
-        "{command}\n__terax_rc=$?\nprintf '\\n%s%s\\n' '{sentinel}' \"$(pwd)\"\nexit $__terax_rc\n",
+        "{command}\n$__terax_rc = if ($null -ne $LASTEXITCODE) {{ $LASTEXITCODE }} elseif ($?) {{ 0 }} else {{ 1 }}\n\"`n{sentinel}$($PWD.Path)\"\nexit $__terax_rc\n",
     )
 }
 
-fn wrap_with_sentinel(command: &str, workspace: &WorkspaceEnv, sentinel: &str) -> String {
-    if workspace.is_wsl() {
-        return wrap_posix_with_sentinel(command, sentinel);
-    }
-    #[cfg(unix)]
-    {
-        wrap_posix_with_sentinel(command, sentinel)
-    }
-    #[cfg(windows)]
-    {
-        format!(
-        "{command}\n$__terax_rc = if ($null -ne $LASTEXITCODE) {{ $LASTEXITCODE }} elseif ($?) {{ 0 }} else {{ 1 }}\n\"`n{sentinel}$($PWD.Path)\"\nexit $__terax_rc\n",
+fn wrap_wsl_with_sentinel(command: &str, sentinel: &str) -> String {
+    format!(
+        "{command}\n__terax_rc=$?\nprintf '\\n%s%s\\n' '{sentinel}' \"$(pwd)\"\nexit $__terax_rc\n",
     )
-    }
 }
 
 fn strip_cwd_sentinel(stdout: &str, _fallback: &str, sentinel: &str) -> (String, Option<String>) {

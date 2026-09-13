@@ -107,15 +107,7 @@ fn hook_command(spec: &AgentSpec, event: &str) -> String {
     }
 }
 
-// Marker to the tty, then `{}` on stdout: Codex/Gemini require a JSON no-op.
-#[cfg(unix)]
-fn osc_command(agent: &str, event: &str) -> String {
-    format!(
-        r#"[ -n "$TERAX_TERMINAL" ] && printf '\033]777;notify;Terax;{agent};{event}\007' > /dev/tty; printf '{{}}'"#
-    )
-}
-
-#[cfg(windows)]
+// The hook calls `terax.exe __terax_notify ...`, which emits the marker.
 fn osc_command(agent: &str, event: &str) -> String {
     let exe = std::env::current_exe()
         .map(|p| p.display().to_string())
@@ -128,16 +120,7 @@ fn osc_command(agent: &str, event: &str) -> String {
 fn status_needle(spec: &AgentSpec, event: &str) -> String {
     match spec.delivery {
         Delivery::TerminalSequence => format!("notify;Terax;{event}"),
-        Delivery::Osc => {
-            #[cfg(unix)]
-            {
-                format!("notify;Terax;{};{event}", spec.agent)
-            }
-            #[cfg(windows)]
-            {
-                format!("__terax_notify {} {event}", spec.agent)
-            }
-        }
+        Delivery::Osc => format!("__terax_notify {} {event}", spec.agent),
     }
 }
 
@@ -288,8 +271,7 @@ pub fn agent_enable_hooks(agent: String) -> Result<(), String> {
 }
 
 // The raw OSC 777 bytes the detector parses. Kept in one place so the Windows
-// CONOUT$ path can't drift from what the Unix /dev/tty hook emits.
-#[cfg(any(windows, test))]
+// CONOUT$ path can't drift from what the status detector expects.
 fn conout_marker(agent: &str, event: &str) -> String {
     format!("\x1b]777;notify;Terax;{agent};{event}\x07")
 }
@@ -297,7 +279,6 @@ fn conout_marker(agent: &str, event: &str) -> String {
 // Windows has no /dev/tty: the hook calls `terax.exe __terax_notify ...` and we
 // write the marker into the ConPTY console. GUI-subsystem release inherits no
 // console, so attach to the hook runner's first.
-#[cfg(windows)]
 pub fn emit_conout_marker(agent: &str, event: &str) {
     use std::io::Write;
     use windows_sys::Win32::System::Console::{AttachConsole, ATTACH_PARENT_PROCESS};
@@ -394,30 +375,6 @@ mod tests {
         );
     }
 
-    #[cfg(unix)]
-    #[test]
-    fn codex_emits_four_field_dev_tty_marker() {
-        let out = merge_hooks(json!({}), spec("codex"));
-        assert_eq!(hook_count(&out, "UserPromptSubmit"), 1);
-        assert_eq!(hook_count(&out, "PermissionRequest"), 1);
-        assert_eq!(hook_count(&out, "Stop"), 1);
-        let stop = command(&out, "Stop", 0);
-        assert!(stop.contains("notify;Terax;codex;finished"));
-        assert!(stop.contains("> /dev/tty"));
-        // Codex Stop rejects empty/non-JSON stdout; the hook must emit a no-op.
-        assert!(stop.contains("printf '{}'"));
-        assert!(!stop.contains("terminalSequence"));
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn gemini_uses_matcher_and_named_marker() {
-        let out = merge_hooks(json!({}), spec("gemini"));
-        assert_eq!(out["hooks"]["BeforeAgent"][0]["matcher"], "*");
-        assert!(command(&out, "AfterAgent", 0).contains("notify;Terax;gemini;finished"));
-        assert!(command(&out, "Notification", 0).contains("notify;Terax;gemini;attention"));
-    }
-
     #[test]
     fn pi_extension_emits_named_working_and_finished_markers() {
         let path = std::path::Path::new("/x/terax-notifications.ts");
@@ -453,30 +410,6 @@ mod tests {
             std::fs::read_to_string(&path).unwrap(),
             "export const mine = true;"
         );
-        std::fs::remove_dir_all(dir).unwrap();
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn pi_extension_install_preserves_symlink() {
-        use std::os::unix::fs::symlink;
-
-        let dir =
-            std::env::temp_dir().join(format!("terax-pi-extension-symlink-{}", std::process::id()));
-        let target = dir.join("managed.ts");
-        let path = dir.join(PI_EXTENSION_FILE);
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
-        std::fs::write(&target, format!("// {PI_EXTENSION_MARKER}\n")).unwrap();
-        symlink(&target, &path).unwrap();
-
-        enable_pi_extension_at(&path).unwrap();
-
-        assert!(std::fs::symlink_metadata(&path)
-            .unwrap()
-            .file_type()
-            .is_symlink());
-        assert_eq!(std::fs::read_to_string(target).unwrap(), PI_EXTENSION);
         std::fs::remove_dir_all(dir).unwrap();
     }
 

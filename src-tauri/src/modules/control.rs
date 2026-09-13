@@ -572,12 +572,6 @@ fn descriptor_path() -> Result<PathBuf, String> {
     let dir = cache.join("terax");
     std::fs::create_dir_all(&dir)
         .map_err(|error| format!("create control directory {}: {error}", dir.display()))?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700))
-            .map_err(|error| format!("secure control directory {}: {error}", dir.display()))?;
-    }
     Ok(dir.join("control.json"))
 }
 
@@ -587,13 +581,6 @@ fn write_descriptor(path: &Path, descriptor: &ControlDescriptor) -> Result<(), S
         .ok_or_else(|| "control descriptor path has no parent".to_string())?;
     let mut temp = tempfile::NamedTempFile::new_in(parent)
         .map_err(|error| format!("create control descriptor: {error}"))?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        temp.as_file()
-            .set_permissions(std::fs::Permissions::from_mode(0o600))
-            .map_err(|error| format!("secure control descriptor: {error}"))?;
-    }
     serde_json::to_writer(&mut temp, descriptor)
         .map_err(|error| format!("serialize control descriptor: {error}"))?;
     temp.write_all(b"\n")
@@ -690,19 +677,6 @@ fn launcher_dir_is_stale(
     }
 }
 
-#[cfg(unix)]
-fn process_is_alive(pid: u32) -> bool {
-    let Ok(pid) = libc::pid_t::try_from(pid) else {
-        return false;
-    };
-    if pid <= 0 {
-        return false;
-    }
-    let result = unsafe { libc::kill(pid, 0) };
-    result == 0 || std::io::Error::last_os_error().raw_os_error() == Some(libc::EPERM)
-}
-
-#[cfg(windows)]
 fn process_is_alive(pid: u32) -> bool {
     use windows_sys::Win32::Foundation::{CloseHandle, GetLastError, ERROR_ACCESS_DENIED};
     use windows_sys::Win32::System::Threading::{OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION};
@@ -729,14 +703,6 @@ fn prepare_cli_launcher(descriptor: &Path, cli_path: &Path) -> Result<PathBuf, S
     let bin_dir = run_dir.join("bin");
     std::fs::create_dir_all(&bin_dir)
         .map_err(|error| format!("create CLI launcher directory: {error}"))?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&run_dir, std::fs::Permissions::from_mode(0o700))
-            .map_err(|error| format!("secure CLI run directory: {error}"))?;
-        std::fs::set_permissions(&bin_dir, std::fs::Permissions::from_mode(0o700))
-            .map_err(|error| format!("secure CLI bin directory: {error}"))?;
-    }
 
     let launcher = bin_dir.join(if cfg!(windows) { "terax.exe" } else { "terax" });
     if std::fs::symlink_metadata(&launcher).is_ok() {
@@ -744,14 +710,8 @@ fn prepare_cli_launcher(descriptor: &Path, cli_path: &Path) -> Result<PathBuf, S
             .map_err(|error| format!("replace stale CLI launcher: {error}"))?;
     }
     if std::fs::hard_link(cli_path, &launcher).is_err() {
-        #[cfg(unix)]
-        std::os::unix::fs::symlink(cli_path, &launcher)
-            .map_err(|error| format!("link CLI launcher: {error}"))?;
-        #[cfg(windows)]
-        {
-            std::fs::copy(cli_path, &launcher)
-                .map_err(|error| format!("copy CLI launcher: {error}"))?;
-        }
+        std::fs::copy(cli_path, &launcher)
+            .map_err(|error| format!("copy CLI launcher: {error}"))?;
     }
     Ok(bin_dir)
 }
@@ -953,29 +913,5 @@ mod tests {
 
         remove_own_descriptor(&path, &descriptor.token);
         assert!(!path.exists());
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn descriptor_is_private_to_the_current_user() {
-        use std::os::unix::fs::PermissionsExt;
-
-        let temp = tempfile::tempdir().expect("temp directory");
-        let path = temp.path().join("control.json");
-        let descriptor = ControlDescriptor {
-            protocol: PROTOCOL_VERSION,
-            address: "127.0.0.1:4312".into(),
-            token: "a".repeat(64),
-            pid: 11,
-            app_version: "test".into(),
-        };
-        write_descriptor(&path, &descriptor).expect("write descriptor");
-
-        let mode = std::fs::metadata(path)
-            .expect("descriptor metadata")
-            .permissions()
-            .mode()
-            & 0o777;
-        assert_eq!(mode, 0o600);
     }
 }

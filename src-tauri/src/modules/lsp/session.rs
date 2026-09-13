@@ -29,7 +29,6 @@ pub struct LspExit {
 }
 
 pub struct LspSession {
-    #[cfg(windows)]
     _job: Option<crate::modules::proc::job::ProcessJob>,
     child: Arc<SharedChild>,
     stdin: Mutex<Option<ChildStdin>>,
@@ -47,14 +46,10 @@ impl LspSession {
     }
 
     // Servers fork helpers (cargo check, rustc, proc-macro hosts); killing
-    // only the leader leaves them burning CPU. Unix: signal the process
-    // group. Windows: the Job Object covers the tree.
+    // only the leader leaves them burning CPU. On Windows the Job Object
+    // covers the tree.
     pub fn kill(&self) {
         *self.stdin.lock().unwrap() = None;
-        #[cfg(unix)]
-        unsafe {
-            libc::kill(-(self.child.id() as libc::pid_t), libc::SIGKILL);
-        }
         let _ = self.child.kill();
     }
 }
@@ -86,14 +81,6 @@ pub fn spawn(
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
     crate::modules::proc::hide_console(&mut cmd);
-    #[cfg(unix)]
-    unsafe {
-        use std::os::unix::process::CommandExt;
-        cmd.pre_exec(|| {
-            libc::setpgid(0, 0);
-            Ok(())
-        });
-    }
 
     let child = Arc::new(
         SharedChild::spawn(&mut cmd)
@@ -115,7 +102,6 @@ pub fn spawn(
         "lsp: no stderr pipe".to_string()
     })?;
 
-    #[cfg(windows)]
     let job = match crate::modules::proc::job::ProcessJob::create_for(child.id()) {
         Ok(j) => Some(j),
         Err(e) => {
@@ -126,7 +112,6 @@ pub fn spawn(
 
     let exited = Arc::new(AtomicBool::new(false));
     let session = Arc::new(LspSession {
-        #[cfg(windows)]
         _job: job,
         child: child.clone(),
         stdin: Mutex::new(Some(stdin)),
@@ -280,92 +265,4 @@ pub fn spawn(
         .map_err(|e| e.to_string())?;
 
     Ok(session)
-}
-
-#[cfg(all(test, unix))]
-mod tests {
-    use super::*;
-
-    fn dummy_session(child: Arc<SharedChild>, stdin: Option<ChildStdin>) -> LspSession {
-        LspSession {
-            child,
-            stdin: Mutex::new(stdin),
-            exited: Arc::new(AtomicBool::new(false)),
-        }
-    }
-
-    #[test]
-    fn drop_kills_child() {
-        let mut cmd = Command::new("/bin/sh");
-        cmd.args(["-c", "sleep 30"]).stdin(Stdio::piped());
-        let child = Arc::new(SharedChild::spawn(&mut cmd).expect("spawn"));
-        let stdin = child.take_stdin();
-        let session = dummy_session(child.clone(), stdin);
-
-        assert!(child.try_wait().expect("try_wait").is_none());
-        drop(session);
-
-        let deadline = Instant::now() + Duration::from_secs(2);
-        loop {
-            if child.try_wait().expect("try_wait").is_some() {
-                break;
-            }
-            assert!(Instant::now() < deadline, "child alive 2s after drop");
-            thread::sleep(Duration::from_millis(20));
-        }
-    }
-
-    #[test]
-    fn kill_takes_down_process_group() {
-        let mut cmd = Command::new("/bin/sh");
-        cmd.args(["-c", "sleep 30 & echo $!; wait"])
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped());
-        unsafe {
-            use std::os::unix::process::CommandExt;
-            cmd.pre_exec(|| {
-                libc::setpgid(0, 0);
-                Ok(())
-            });
-        }
-        let child = Arc::new(SharedChild::spawn(&mut cmd).expect("spawn"));
-        let stdin = child.take_stdin();
-        let mut stdout = child.take_stdout().expect("stdout");
-
-        let mut buf = [0u8; 32];
-        let n = stdout.read(&mut buf).expect("read grandchild pid");
-        let grandchild: i32 = String::from_utf8_lossy(&buf[..n])
-            .trim()
-            .parse()
-            .expect("pid");
-
-        let session = dummy_session(child.clone(), stdin);
-        session.kill();
-        let _ = child.wait();
-
-        let deadline = Instant::now() + Duration::from_secs(2);
-        loop {
-            let alive = unsafe { libc::kill(grandchild, 0) } == 0;
-            if !alive {
-                break;
-            }
-            assert!(
-                Instant::now() < deadline,
-                "grandchild survived group kill",
-            );
-            thread::sleep(Duration::from_millis(20));
-        }
-    }
-
-    #[test]
-    fn write_after_kill_errors() {
-        let mut cmd = Command::new("/bin/cat");
-        cmd.stdin(Stdio::piped()).stdout(Stdio::null());
-        let child = Arc::new(SharedChild::spawn(&mut cmd).expect("spawn"));
-        let stdin = child.take_stdin();
-        let session = dummy_session(child, stdin);
-
-        session.kill();
-        assert!(session.write_message("{}").is_err());
-    }
 }

@@ -2,8 +2,6 @@ mod agent_detect;
 mod da_filter;
 mod output;
 mod session;
-#[cfg(unix)]
-mod unix_reader;
 pub(crate) mod shell_init;
 
 use std::collections::HashMap;
@@ -261,33 +259,10 @@ pub fn pty_has_foreground_job(state: tauri::State<PtyState>, id: u32) -> Result<
     if shell_pid == 0 {
         return Ok(false);
     }
-    #[cfg(unix)]
-    {
-        let leader = session
-            .master
-            .lock()
-            .unwrap()
-            .as_ref()
-            .and_then(|master| master.process_group_leader());
-        Ok(matches!(leader, Some(pid) if pid > 0 && pid as u32 != shell_pid))
-    }
-    #[cfg(windows)]
-    {
-        Ok(shell_has_children(shell_pid))
-    }
+    Ok(shell_has_children(shell_pid))
 }
 
 // pgrep -P exits 0 when shell_pid has at least one child, 1 when none.
-#[cfg(unix)]
-fn shell_has_children(shell_pid: u32) -> bool {
-    std::process::Command::new("pgrep")
-        .args(["-P", &shell_pid.to_string()])
-        .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false)
-}
-
-#[cfg(windows)]
 fn shell_has_children(shell_pid: u32) -> bool {
     use std::mem::{size_of, zeroed};
     use windows_sys::Win32::Foundation::{CloseHandle, INVALID_HANDLE_VALUE};

@@ -93,16 +93,6 @@ fn scan_path() -> Vec<String> {
     v
 }
 
-#[cfg(unix)]
-fn is_executable(entry: &std::fs::DirEntry) -> bool {
-    use std::os::unix::fs::PermissionsExt;
-    entry
-        .metadata()
-        .map(|m| m.permissions().mode() & 0o111 != 0)
-        .unwrap_or(false)
-}
-
-#[cfg(windows)]
 fn is_executable(entry: &std::fs::DirEntry) -> bool {
     match entry.file_name().to_str() {
         Some(name) => {

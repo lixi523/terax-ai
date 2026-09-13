@@ -71,21 +71,6 @@ fn authorize_mutation_entry(path: &Path, root: &Path) -> Result<(), String> {
     }
 }
 
-#[cfg(unix)]
-fn conflict_token(metadata: &std::fs::Metadata) -> String {
-    use std::os::unix::fs::MetadataExt;
-    format!(
-        "{}:{}:{}:{}:{}:{}",
-        metadata.dev(),
-        metadata.ino(),
-        metadata.mode(),
-        metadata.size(),
-        metadata.mtime(),
-        metadata.mtime_nsec()
-    )
-}
-
-#[cfg(target_os = "windows")]
 fn conflict_token(metadata: &std::fs::Metadata) -> String {
     use std::os::windows::fs::MetadataExt;
     format!(
@@ -97,17 +82,6 @@ fn conflict_token(metadata: &std::fs::Metadata) -> String {
     )
 }
 
-#[cfg(not(any(unix, target_os = "windows")))]
-fn conflict_token(metadata: &std::fs::Metadata) -> String {
-    use std::time::UNIX_EPOCH;
-    let modified = metadata
-        .modified()
-        .ok()
-        .and_then(|time| time.duration_since(UNIX_EPOCH).ok())
-        .map_or(0, |duration| duration.as_nanos());
-    format!("{}:{modified}", metadata.len())
-}
-
 fn move_conflict(metadata: &std::fs::Metadata, replaceable: bool) -> FsMoveResult {
     FsMoveResult::Conflict {
         replaceable,
@@ -115,46 +89,6 @@ fn move_conflict(metadata: &std::fs::Metadata, replaceable: bool) -> FsMoveResul
     }
 }
 
-#[cfg(any(target_os = "macos", target_os = "linux"))]
-fn c_path(path: &Path) -> io::Result<std::ffi::CString> {
-    use std::os::unix::ffi::OsStrExt;
-    std::ffi::CString::new(path.as_os_str().as_bytes())
-        .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "path contains a NUL byte"))
-}
-
-#[cfg(target_os = "macos")]
-fn rename_no_replace(from: &Path, to: &Path) -> io::Result<()> {
-    let from = c_path(from)?;
-    let to = c_path(to)?;
-    let result = unsafe { libc::renamex_np(from.as_ptr(), to.as_ptr(), libc::RENAME_EXCL) };
-    if result == 0 {
-        Ok(())
-    } else {
-        Err(io::Error::last_os_error())
-    }
-}
-
-#[cfg(target_os = "linux")]
-fn rename_no_replace(from: &Path, to: &Path) -> io::Result<()> {
-    let from = c_path(from)?;
-    let to = c_path(to)?;
-    let result = unsafe {
-        libc::renameat2(
-            libc::AT_FDCWD,
-            from.as_ptr(),
-            libc::AT_FDCWD,
-            to.as_ptr(),
-            libc::RENAME_NOREPLACE,
-        )
-    };
-    if result == 0 {
-        Ok(())
-    } else {
-        Err(io::Error::last_os_error())
-    }
-}
-
-#[cfg(target_os = "windows")]
 fn move_file_windows(from: &Path, to: &Path, replace: bool) -> io::Result<()> {
     use std::os::windows::ffi::OsStrExt;
     use windows_sys::Win32::Storage::FileSystem::{
@@ -177,35 +111,12 @@ fn move_file_windows(from: &Path, to: &Path, replace: bool) -> io::Result<()> {
     }
 }
 
-#[cfg(target_os = "windows")]
 fn rename_no_replace(from: &Path, to: &Path) -> io::Result<()> {
     move_file_windows(from, to, false)
 }
 
-#[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
-fn rename_no_replace(from: &Path, to: &Path) -> io::Result<()> {
-    if metadata_if_exists(to)?.is_some() {
-        return Err(io::Error::new(
-            io::ErrorKind::AlreadyExists,
-            "destination already exists",
-        ));
-    }
-    std::fs::rename(from, to)
-}
-
-#[cfg(unix)]
-fn replace_file(from: &Path, to: &Path) -> io::Result<()> {
-    std::fs::rename(from, to)
-}
-
-#[cfg(target_os = "windows")]
 fn replace_file(from: &Path, to: &Path) -> io::Result<()> {
     move_file_windows(from, to, true)
-}
-
-#[cfg(not(any(unix, target_os = "windows")))]
-fn replace_file(from: &Path, to: &Path) -> io::Result<()> {
-    std::fs::rename(from, to)
 }
 
 fn remove_path(path: &Path) -> io::Result<()> {
@@ -531,25 +442,6 @@ mod tests {
         assert_eq!(std::fs::read(to).unwrap(), b"to");
     }
 
-    #[cfg(unix)]
-    #[test]
-    fn move_treats_a_broken_destination_symlink_as_a_conflict() {
-        let dir = tempfile::tempdir().unwrap();
-        let from = dir.path().join("from.txt");
-        let to = dir.path().join("to.txt");
-        std::fs::write(&from, b"from").unwrap();
-        std::os::unix::fs::symlink(dir.path().join("missing"), &to).unwrap();
-
-        let result = move_path(dir.path(), &from, &to, None).unwrap();
-
-        assert!(conflict(result).0);
-        assert_eq!(std::fs::read(from).unwrap(), b"from");
-        assert!(std::fs::symlink_metadata(to)
-            .unwrap()
-            .file_type()
-            .is_symlink());
-    }
-
     #[test]
     fn move_result_serializes_the_frontend_contract() {
         assert_eq!(
@@ -710,7 +602,6 @@ mod tests {
 
     // Deleting a symlink that points at a directory must remove only the link,
     // never recurse through it and wipe the target's contents.
-    #[cfg(unix)]
     #[test]
     fn delete_does_not_follow_symlink_into_target() {
         let dir = tempfile::tempdir().unwrap();
@@ -719,7 +610,7 @@ mod tests {
         std::fs::write(real.join("keep.txt"), b"keep").unwrap();
 
         let link = dir.path().join("link");
-        std::os::unix::fs::symlink(&real, &link).unwrap();
+        std::os::windows::fs::symlink_dir(&real, &link).unwrap();
 
         fs_delete(s(link.clone()), None).expect("delete symlink");
         assert!(!link.exists(), "symlink itself should be gone");

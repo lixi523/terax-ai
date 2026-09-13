@@ -8,7 +8,7 @@ Terax loads `TERAX.md` from the workspace root as agent memory (similar to AGENT
 
 - Bundle id: `app.crynta.terax`
 - Package manager: **pnpm**
-- Platforms: macOS, Linux, Windows
+- Platforms: Windows
 - Frontend checks: `pnpm lint`, `pnpm check-types`, `pnpm test`
 - Rust checks: `cd src-tauri && cargo clippy --all-targets --locked -- -D warnings`, `cd src-tauri && cargo nextest run --locked` (local fallback: `cargo test --locked`)
 
@@ -67,7 +67,7 @@ or search-mask work until presentation resumes.
 Terminal clipboard shortcuts use the native text clipboard plugin on all desktop
 platforms. Context clicks expose the selected text through the input element to
 restore the webview's native text menu; no persistent DOM scrollback is maintained.
-Unclaimed macOS Command shortcuts reach the native menu after explicit clipboard,
+Unclaimed shortcuts reach the webview's default handling after explicit clipboard,
 block-editor, and readline bindings, including when Kitty keyboard mode is active.
 The block prompt retains an enabled terminal input proxy for native menus and
 routes editing keys, composed text and paste back to its command editor.
@@ -122,7 +122,7 @@ and reload. `window.__teraxTerm()` reads frontend counters;
 labeled host RSS. Host RSS
 excludes WebContent and GPU processes and is not total application memory.
 
-Ghostty presentation uses shared native macOS occlusion/sleep and DOM visibility
+Ghostty presentation uses DOM visibility
 tracking. It pauses immediately, retains presentation for two seconds during
 short desktop transitions, and then reclaims hidden-window GPU resources.
 Sleep requests immediate reclamation; hidden tabs still release their leases
@@ -164,11 +164,11 @@ establish production readiness, platform parity, or multi-day resource stability
 - `shell::shell_run_command`: one-shot subshell exec used by AI tools. Distinct from PTY sessions; not the user's interactive terminal. On Windows via PowerShell (`-NoProfile -Command`), on Unix via `$SHELL -lc`. Shared helper `build_oneshot_command`.
 - `shell::shell_session_*`: persistent agent shell with state across calls. `shell::shell_bg_*` (`spawn`, `logs`, `kill`, `list`): long-running background processes (dev servers etc.) with bounded ring-buffer log capture.
 - `workspace::*`: `workspace_authorize` / `workspace_current_dir` (the spawn/git/AI cwd authorization registry) plus the WSL bridge (`wsl_list_distros`, `wsl_default_distro`, `wsl_home`).
-- `lsp::*` (`lsp_detect`, `lsp_host_pid`, `lsp_resolve_root`, `lsp_spawn`, `lsp_send`, `lsp_kill`): language server process host. Dumb JSON-RPC pipe: Content-Length framing + process lifecycle in Rust (`lsp/framing.rs`, pure + tested), protocol intelligence on the frontend. Spawn cwd gated through the workspace registry; binaries resolve via the captured login-shell env (`lsp/env.rs`, GUI apps get a bare PATH on macOS); root detection walks up to markers but never to or above `$HOME`. Servers run in their own process group on Unix and are group-killed (cargo check / proc-macro children die with the server); Windows children get a `proc::job::ProcessJob` (kill-on-close, shared with pty). All sessions killed on `RunEvent::Exit`.
+- `lsp::*` (`lsp_detect`, `lsp_host_pid`, `lsp_resolve_root`, `lsp_spawn`, `lsp_send`, `lsp_kill`): language server process host. Dumb JSON-RPC pipe: Content-Length framing + process lifecycle in Rust (`lsp/framing.rs`, pure + tested), protocol intelligence on the frontend. Spawn cwd gated through the workspace registry; binaries resolve via the captured login-shell env (`lsp/env.rs`); root detection walks up to markers but never to or above `$HOME`. Windows children get a `proc::job::ProcessJob` (kill-on-close, shared with pty). All sessions killed on `RunEvent::Exit`.
 - `net::*` (`ai_http_request`, `ai_http_stream`, `lm_ping`): AI HTTP proxy with SSRF guard; keeps provider calls and local-model pings off the webview.
-- `secrets::secrets_*`: OS keychain via the `keyring` crate. Service constant `terax-ai`. Linux uses a file-based fallback gated behind `#[cfg(target_os = "linux")]`.
+- `secrets::secrets_*`: OS keychain via the `keyring` crate. Service constant `terax-ai`.
 - `open_settings_window`: separate webview window for Settings (optional `tab` arg deep-links a section).
-- `vibrancy::window_*`: native window backdrop (`window_backdrop_kind`, `window_set_backdrop`). macOS gets `NSVisualEffectMaterial::UnderWindowBackground`, Windows 11 gets Mica (gated on build >= 22000 via `RtlGetVersion`, since `apply_mica` fails on Windows 10), Linux reports `none` because blur there belongs to the compositor. The `window-vibrancy` crate is a macOS/Windows-only dependency so Linux builds never pull it.
+- `vibrancy::window_*`: native window backdrop (`window_backdrop_kind`, `window_set_backdrop`). Windows 11 gets Mica (gated on build >= 22000 via `RtlGetVersion`, since `apply_mica` fails on Windows 10).
 
 ### PTY shell integration
 
@@ -181,7 +181,7 @@ PTY shells are bootstrapped via injected init scripts in `src-tauri/src/modules/
 
 ConPTY on Windows requires `CONPTY_LIFECYCLE_LOCK` (Mutex) around `openpty + spawn_command` in `session.rs`. Concurrent spawns leave one of the resulting PTYs with a stalled output pipe. Don't remove the lock without verifying first-tab stability under fast tab spam.
 
-Each ConPTY child is also assigned to a per-session **Job Object** with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE` (`pty/job.rs`). When the Job HANDLE drops - clean shutdown, panic, or even SIGKILL'd Terax process - the kernel kills every descendant of the shell (e.g. `npm run dev` spawned from inside pwsh). Without this Windows orphans the entire process subtree because `TerminateProcess` only kills the immediate child. macOS/Linux rely on `Drop for Session → killer.kill()`; on dev-`Ctrl-C` of `cargo run` destructors don't fire and orphans are possible there too - acceptable for now since dev only.
+Each ConPTY child is also assigned to a per-session **Job Object** with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE` (`pty/job.rs`). When the Job HANDLE drops - clean shutdown, panic, or even SIGKILL'd Terax process - the kernel kills every descendant of the shell (e.g. `npm run dev` spawned from inside pwsh). Without this Windows orphans the entire process subtree because `TerminateProcess` only kills the immediate child.
 
 `AiComposerProvider` is mounted unconditionally at the App.tsx root: a conditional wrapper would change the parent element type when keys load, remounting the entire tree (and re-spawning every PTY) the moment `getAllKeys()` resolves. Production happened to dodge this because keychain reads can land in the same paint frame; dev didn't. Keep the unconditional wrap.
 
@@ -201,7 +201,7 @@ Each module is self-contained, exports a thin barrel via `index.ts`, and owns it
 - **explorer/** - file tree with Material/Catppuccin icons (`iconResolver.ts`), fuzzy search, keyboard nav, inline rename, context actions. Backslash-aware `basename`.
 - **preview/** - auto-detected dev-server preview tab (status-bar pill suggests opening when a localhost URL is detected).
 - **tabs/** - `useTabs` is the source of truth for tab list + active id. `useWorkspaceCwd` derives explorer root + inherited cwd for new tabs from active tab. `basename` splits on both `/` and `\`.
-- **header/** - top bar + inline search (`SearchInline` adapts to terminal vs editor via `SearchTarget`). `WindowControls` rendered when `USE_CUSTOM_WINDOW_CONTROLS` is true (Linux + Windows; macOS uses native traffic lights).
+- **header/** - top bar + inline search (`SearchInline` adapts to terminal vs editor via `SearchTarget`). `WindowControls` rendered when `USE_CUSTOM_WINDOW_CONTROLS` is true.
 - **statusbar/** - bottom bar, `CwdBreadcrumb` (handles Unix paths, Windows drive letters, and home `~` segments via `pathUtils.segmentsFromCwd`), AI tools indicator.
 - **shortcuts/** - keymap registry (`shortcuts.ts`) + `useGlobalShortcuts`. Handlers live in `App.tsx` and are passed in by id (`tab.new`, `ai.toggle`, …). `metaKey || ctrlKey` for cross-platform Cmd/Ctrl.
 - **settings/** - settings store (`store.ts` via `tauri-plugin-store`), preferences hook, settings window opener.
@@ -247,9 +247,7 @@ BYOK. Cloud providers via `@ai-sdk/*`: **OpenAI, Anthropic, Google, xAI, Cerebra
 
 ### Window styling
 
-- macOS: `titleBarStyle: Overlay` + `hiddenTitle: true` in `tauri.conf.json` (native traffic lights via overlay). `transparent: true` + `macOSPrivateApi: true` in `tauri.conf.json` are what `NSVisualEffectView` requires; that also means the macOS build uses a private API and is not App Store eligible.
-- Linux: `decorations: false` + `transparent: true` from `tauri.linux.conf.json`; re-asserted post-realize for GNOME/Mutter CSD.
-- Windows: same as Linux via `tauri.windows.conf.json`. React renders custom `WindowControls`.
+- Windows: `decorations: false` + `transparent: true` via `tauri.windows.conf.json`. React renders custom `WindowControls`.
 
 ### Tauri capabilities
 
@@ -267,8 +265,7 @@ BYOK. Cloud providers via `@ai-sdk/*`: **OpenAI, Anthropic, Google, xAI, Cerebra
 ### Bundle config
 
 - `bundle.targets: "all"` plus per-platform sections in `tauri.conf.json`:
-  - **macOS**: `minimumSystemVersion: 13.0`.
-  - **Linux**: deb depends `libwebkit2gtk-4.1-0`, `libgtk-3-0`; rpm `webkit2gtk4.1`, `gtk3`; AppImage bundles its media framework.
+  - **Windows**: NSIS installer (`-setup.exe`) + WiX `.msi`; per-machine and per-user install sides coexist. Updater artifacts: `.msi.zip` + `latest.json` (v1 compatible JSON).
   - **Windows**: NSIS installer in `currentUser` mode (no admin required), WebView2 via `downloadBootstrapper`. Installing a missing WebView2 runtime requires internet access; there is no bundled offline runtime. Packaged and offline-install validation remains in the release-readiness gates.
 - Auto-updater configured with a public minisign key; release artifacts at `https://github.com/crynta/terax-ai/releases/latest/download/latest.json`.
 - `bundle.resources` includes the upstream Ghostty, Restty, ghostty-web, and xterm.js license notices under `licenses/terminal/`. Repository documentation and test-only reference WASM cores are not packaged; the frontend includes only the adapted SIMD and scalar cores.

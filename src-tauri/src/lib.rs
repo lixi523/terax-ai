@@ -1,15 +1,9 @@
 pub mod modules;
 
-#[cfg(target_os = "macos")]
-use modules::app_menu;
-use modules::{
-    agent, control, fs, git, history, lsp, net, pty, secrets, shell, vibrancy, workspace,
-};
+use modules::{agent, control, fs, git, history, lsp, net, pty, secrets, shell, vibrancy, workspace};
 use std::path::PathBuf;
 use std::sync::Mutex;
 use tauri::{Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder};
-#[cfg(target_os = "macos")]
-use tauri::{PhysicalPosition, WindowEvent};
 use tauri_plugin_window_state::StateFlags;
 
 /// Drained on first read so HMR / re-mounts can't replay the launch dir.
@@ -81,8 +75,9 @@ fn parse_launch_target() -> LaunchTarget {
     resolve_launch_target(entries)
 }
 
-const fn settings_always_on_top(is_macos: bool) -> bool {
-    !is_macos
+/// The settings window floats above the main window.
+const fn settings_always_on_top() -> bool {
+    true
 }
 
 #[tauri::command]
@@ -93,7 +88,6 @@ async fn open_settings_window(app: tauri::AppHandle, tab: Option<String>) -> Res
     };
 
     if let Some(window) = app.get_webview_window("settings") {
-        #[cfg(not(target_os = "macos"))]
         let _ = window.set_always_on_top(true);
         let _ = window.show();
         let _ = window.set_focus();
@@ -111,52 +105,13 @@ async fn open_settings_window(app: tauri::AppHandle, tab: Option<String>) -> Res
         .min_inner_size(820.0, 620.0)
         .resizable(true)
         .visible(false)
-        .always_on_top(settings_always_on_top(cfg!(target_os = "macos")));
+        .always_on_top(settings_always_on_top());
 
-    // A normal-level child stays above Terax but recedes with the app on macOS.
-    // Never combine the macOS parent with always_on_top; that breaks WebView
-    // compositing and can hide Settings behind the main window (#33, #957).
-    let builder = if let Some(main) = app.get_webview_window("main") {
-        builder.parent(&main).map_err(|e| e.to_string())?
-    } else {
-        builder
-    };
-
-    #[cfg(target_os = "macos")]
-    let builder = builder
-        .title_bar_style(tauri::TitleBarStyle::Overlay)
-        .hidden_title(true);
-
-    // On Linux/Windows we render our own titlebar, so drop native chrome
-    // and make the window transparent.
-    #[cfg(any(target_os = "linux", target_os = "windows"))]
+    // We render our own titlebar, so drop native chrome and make the window
+    // transparent.
     let builder = builder.decorations(false).transparent(true);
 
     let window = builder.build().map_err(|e| e.to_string())?;
-
-    // Some Linux compositors (GNOME/Mutter with CSD-by-default) ignore the
-    // builder-time decorations flag — re-assert it after realize.
-    #[cfg(target_os = "linux")]
-    {
-        let _ = window.set_decorations(false);
-    }
-
-    #[cfg(target_os = "macos")]
-    if let Some(main) = app.get_webview_window("main") {
-        if let (Ok(main_pos), Ok(main_size), Ok(settings_size)) = (
-            main.outer_position(),
-            main.outer_size(),
-            window.outer_size(),
-        ) {
-            let x = main_pos.x
-                + ((main_size.width as i32).saturating_sub(settings_size.width as i32)) / 2;
-            let y = main_pos.y
-                + ((main_size.height as i32).saturating_sub(settings_size.height as i32)) / 2;
-            let _ = window.set_position(PhysicalPosition::new(x, y));
-        } else {
-            let _ = window.center();
-        }
-    }
 
     Ok(())
 }
@@ -186,10 +141,6 @@ pub fn run() {
 
     let builder = tauri::Builder::default();
     let builder = builder.plugin(tauri_plugin_clipboard_manager::init());
-    #[cfg(target_os = "macos")]
-    let builder = builder
-        .menu(app_menu::build)
-        .on_menu_event(app_menu::handle_event);
     builder
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
@@ -212,22 +163,8 @@ pub fn run() {
         )
         .plugin(tauri_plugin_opener::init())
         .setup(move |_app| {
-            #[cfg(target_os = "macos")]
-            modules::window_presentation::macos::install(_app.handle());
             if let Err(error) = control::start(_app.handle().clone(), control_for_setup.clone()) {
                 log::warn!("could not start Terax control server: {error}");
-            }
-            #[cfg(target_os = "macos")]
-            if let Some(main) = _app.get_webview_window("main") {
-                let handle = _app.handle().clone();
-                main.on_window_event(move |event| {
-                    // CloseRequested can be cancelled by the frontend guard.
-                    if matches!(event, WindowEvent::Destroyed) {
-                        if let Some(settings) = handle.get_webview_window("settings") {
-                            let _ = settings.destroy();
-                        }
-                    }
-                });
             }
             Ok(())
         })
@@ -349,44 +286,12 @@ pub fn run() {
                 // Servers exit on stdin EOF, but destructors are not guaranteed
                 // on process exit; kill explicitly.
                 tauri::RunEvent::Exit => {
-                    #[cfg(target_os = "macos")]
-                    modules::window_presentation::macos::uninstall();
                     if let Some(state) = app.try_state::<lsp::LspState>() {
                         state.kill_all();
                     }
                     if let Some(state) = app.try_state::<control::ControlState>() {
                         state.shutdown();
                     }
-                }
-                // macOS delivers "Open With" files here, not as argv (cold and
-                // warm start, several at once). Seed the drain-once state and
-                // emit; canonicalize so the /tmp -> /private/tmp symlink can't
-                // defeat openFileTab's path dedupe against a CLI launch.
-                #[cfg(target_os = "macos")]
-                tauri::RunEvent::Opened { urls } => {
-                    let entries = urls
-                        .iter()
-                        .filter_map(|u| u.to_file_path().ok())
-                        .filter_map(|p| std::fs::canonicalize(p).ok())
-                        .filter(|p| p.is_file())
-                        .map(LaunchEntry::File)
-                        .collect();
-                    let target = resolve_launch_target(entries);
-                    if target.files.is_empty() {
-                        return;
-                    }
-                    if let Some(dir) = &target.dir {
-                        if let Some(registry) = app.try_state::<workspace::WorkspaceRegistry>() {
-                            let _ = registry.authorize(dir);
-                        }
-                        if let Some(state) = app.try_state::<LaunchDir>() {
-                            *state.0.lock().expect("LaunchDir mutex poisoned") = Some(dir.clone());
-                        }
-                    }
-                    if let Some(state) = app.try_state::<LaunchFiles>() {
-                        *state.0.lock().expect("LaunchFiles mutex poisoned") = target.files.clone();
-                    }
-                    let _ = app.emit("terax:open-file", target.files);
                 }
                 _ => {}
             }
@@ -443,8 +348,7 @@ mod launch_target_tests {
     }
 
     #[test]
-    fn settings_float_only_outside_macos() {
-        assert!(!settings_always_on_top(true));
-        assert!(settings_always_on_top(false));
+    fn settings_window_floats() {
+        assert!(settings_always_on_top());
     }
 }

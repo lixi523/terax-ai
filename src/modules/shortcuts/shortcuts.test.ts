@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import { getBindingTokens, type KeyBinding, matchBinding } from "./shortcuts";
 
 // These tests run in the vitest node environment, where the Tauri OS plugin is
-// unavailable so `IS_MAC` resolves to false. That makes the non-mac token
-// branch deterministic across host platforms.
+// unavailable so `PLATFORM` resolves to "". That makes the token branch
+// deterministic.
 
 function event(over: Partial<KeyboardEvent>): KeyboardEvent {
   return {

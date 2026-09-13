@@ -175,11 +175,8 @@ pub(super) struct OutputDiagnostics {
 }
 
 pub struct Session {
-    #[cfg(unix)]
-    reader_control: Arc<super::unix_reader::ReaderControl>,
     // Drop the Windows job before pipe handles. The waiter retains the master
     // and closes ConPTY while the reader drains the final output through EOF.
-    #[cfg(windows)]
     _job: Option<crate::modules::proc::job::ProcessJob>,
     /// PID of the shell process. 0 means unknown; callers must skip checks when 0.
     pub shell_pid: u32,
@@ -194,8 +191,6 @@ pub struct Session {
 impl Drop for Session {
     fn drop(&mut self) {
         self.output.close();
-        #[cfg(unix)]
-        self.reader_control.cancel();
         // If the session Arc is dropped without an explicit pty_close (e.g.
         // frontend disconnected, window crashed, dev HMR), the reader/flusher
         // threads would otherwise stay alive forever holding the child. Kill
@@ -226,8 +221,6 @@ impl Session {
 
     pub(super) fn close_output(&self) {
         self.output.close();
-        #[cfg(unix)]
-        self.reader_control.cancel();
     }
 
     pub(super) fn resize(&self, size: PtySize) -> Result<(), String> {
@@ -245,11 +238,9 @@ impl Session {
 }
 // Serializes ConPTY create and close: overlapping pseudoconsole lifecycle
 // calls corrupt the new console so its shell never pumps output (issue #356).
-#[cfg(windows)]
 static CONPTY_LIFECYCLE_LOCK: Mutex<()> = Mutex::new(());
 
 pub(super) fn drop_session(session: Arc<Session>) {
-    #[cfg(windows)]
     let _guard = CONPTY_LIFECYCLE_LOCK.lock().unwrap();
     drop(session);
 }
@@ -292,7 +283,6 @@ pub fn spawn(
     on_data: Channel<Response>,
     on_exit: Channel<i32>,
 ) -> Result<(Arc<Session>, PtySize), String> {
-    #[cfg(windows)]
     let _spawn_guard = CONPTY_LIFECYCLE_LOCK.lock().unwrap();
 
     let pty_system = native_pty_system();
@@ -312,11 +302,7 @@ pub fn spawn(
     // can't outlive an aborted pty_open.
     let mut guard = ChildKillGuard::new(child.clone_killer());
     let killer = child.clone_killer();
-    #[cfg(windows)]
     let mut reader = pair.master.try_clone_reader().map_err(|e| e.to_string())?;
-    #[cfg(unix)]
-    let (mut reader, reader_control) =
-        super::unix_reader::UnixPtyReader::new(pair.master.as_ref()).map_err(|e| e.to_string())?;
     let writer: Arc<Mutex<Box<dyn Write + Send>>> = Arc::new(Mutex::new(
         pair.master.take_writer().map_err(|e| e.to_string())?,
     ));
@@ -324,7 +310,6 @@ pub fn spawn(
 
     let shell_pid = child.process_id().unwrap_or(0);
 
-    #[cfg(windows)]
     let job = match child.process_id() {
         Some(pid) => match crate::modules::proc::job::ProcessJob::create_for(pid) {
             Ok(j) => Some(j),
@@ -340,9 +325,6 @@ pub fn spawn(
     let output = Arc::new(OutputQueue::new());
 
     let session = Arc::new(Session {
-        #[cfg(unix)]
-        reader_control: reader_control.clone(),
-        #[cfg(windows)]
         _job: job,
         shell_pid,
         killer: Mutex::new(killer),
@@ -372,10 +354,7 @@ pub fn spawn(
                     Ok(0) => break,
                     Ok(n) => {
                         if output_r.state.lock().unwrap().closed {
-                            #[cfg(windows)]
                             continue;
-                            #[cfg(not(windows))]
-                            break;
                         }
                         if !first_byte_r.load(Ordering::Relaxed) {
                             first_byte_r.store(true, Ordering::Release);
@@ -397,19 +376,10 @@ pub fn spawn(
                             continue;
                         }
                         if !output_r.push(&filtered) {
-                            #[cfg(windows)]
                             continue;
-                            #[cfg(not(windows))]
-                            break;
                         }
                     }
                     Err(e) => {
-                        #[cfg(unix)]
-                        {
-                            output_r.state.lock().unwrap().reader_failed = true;
-                            log::error!("pty reader failed: {e}");
-                        }
-                        #[cfg(windows)]
                         log::debug!("pty reader ended: {e}");
                         break;
                     }
@@ -424,8 +394,6 @@ pub fn spawn(
 
     let on_data_flush = on_data;
     let output_f = output.clone();
-    #[cfg(unix)]
-    let reader_control_f = reader_control.clone();
     let flusher_thread = thread::Builder::new()
         .name("terax-pty-flusher".into())
         .spawn(move || {
@@ -449,8 +417,6 @@ pub fn spawn(
                 }
                 if let Err(e) = on_data_flush.send(Response::new(chunk)) {
                     output_f.close();
-                    #[cfg(unix)]
-                    reader_control_f.cancel();
                     log::debug!("pty flusher exiting, channel closed: {e}");
                     break;
                 }
@@ -462,7 +428,6 @@ pub fn spawn(
     let output_e = output;
     let app_waiter = app;
     let finished_w = finished;
-    #[cfg(windows)]
     let master_e = session.master.clone();
     thread::Builder::new()
         .name("terax-pty-waiter".into())
@@ -476,15 +441,10 @@ pub fn spawn(
             };
             // Arm before ConPTY close and either join: both can depend on credit.
             output_e.begin_exit(EXIT_ACK_TIMEOUT);
-            #[cfg(unix)]
-            reader_control.finish();
-            #[cfg(windows)]
-            {
-                // Closing ConPTY can emit a final frame. Keep the reader alive until EOF.
-                let master = master_e.lock().unwrap().take();
-                let _guard = CONPTY_LIFECYCLE_LOCK.lock().unwrap();
-                drop(master);
-            }
+            // Closing ConPTY can emit a final frame. Keep the reader alive until EOF.
+            let master = master_e.lock().unwrap().take();
+            let _guard = CONPTY_LIFECYCLE_LOCK.lock().unwrap();
+            drop(master);
             if let Err(e) = reader_thread.join() {
                 log::error!("pty reader thread panicked: {e:?}");
                 output_e.close();
@@ -655,114 +615,3 @@ mod flow_control_tests {
     }
 }
 
-#[cfg(all(test, unix))]
-mod tests {
-    use super::*;
-    use portable_pty::CommandBuilder;
-
-    #[test]
-    fn pty_output_coalescing_preserves_latency_and_bounds_sustained_ipc() {
-        assert_eq!(flush_coalesce_delay(None, 1), FLUSH_INTERACTIVE_COALESCE);
-        assert_eq!(
-            flush_coalesce_delay(Some(Duration::from_millis(100)), 1),
-            FLUSH_INTERACTIVE_COALESCE,
-        );
-        assert_eq!(
-            flush_coalesce_delay(Some(Duration::from_millis(10)), 1),
-            FLUSH_SUSTAINED_COALESCE,
-        );
-        assert_eq!(
-            flush_coalesce_delay(Some(Duration::from_millis(10)), FLUSH_IMMEDIATE_BYTES),
-            Duration::ZERO,
-        );
-    }
-
-    #[test]
-    fn drop_kills_child_process() {
-        let pty_system = native_pty_system();
-        let size = PtySize {
-            rows: 24,
-            cols: 80,
-            pixel_width: 0,
-            pixel_height: 0,
-        };
-        let pair = pty_system.openpty(size).expect("openpty");
-
-        let mut cmd = CommandBuilder::new("/bin/sh");
-        cmd.arg("-c");
-        cmd.arg("sleep 30");
-        let mut child = pair.slave.spawn_command(cmd).expect("spawn");
-        drop(pair.slave);
-
-        let killer = child.clone_killer();
-        let writer: Arc<Mutex<Box<dyn Write + Send>>> =
-            Arc::new(Mutex::new(pair.master.take_writer().expect("writer")));
-
-        let session = Arc::new(Session {
-            reader_control: super::super::unix_reader::UnixPtyReader::new(pair.master.as_ref())
-                .unwrap()
-                .1,
-            shell_pid: child.process_id().unwrap_or(0),
-            killer: Mutex::new(killer),
-            writer,
-            master: Arc::new(Mutex::new(Some(pair.master))),
-            output: Arc::new(OutputQueue::new()),
-            finished: Arc::new(AtomicBool::new(false)),
-        });
-
-        assert!(
-            child.try_wait().unwrap().is_none(),
-            "child must be alive before drop",
-        );
-
-        drop(session);
-
-        let deadline = Instant::now() + Duration::from_secs(2);
-        let mut exited = false;
-        while Instant::now() < deadline {
-            if child.try_wait().unwrap().is_some() {
-                exited = true;
-                break;
-            }
-            thread::sleep(Duration::from_millis(20));
-        }
-        assert!(exited, "child still running 2s after Session drop");
-    }
-
-    #[test]
-    fn drop_session_succeeds_after_child_already_exited() {
-        let pty_system = native_pty_system();
-        let size = PtySize {
-            rows: 24,
-            cols: 80,
-            pixel_width: 0,
-            pixel_height: 0,
-        };
-        let pair = pty_system.openpty(size).expect("openpty");
-
-        let mut cmd = CommandBuilder::new("/bin/sh");
-        cmd.arg("-c");
-        cmd.arg("exit 0");
-        let mut child = pair.slave.spawn_command(cmd).expect("spawn");
-        drop(pair.slave);
-        let _ = child.wait();
-
-        let killer = child.clone_killer();
-        let writer: Arc<Mutex<Box<dyn Write + Send>>> =
-            Arc::new(Mutex::new(pair.master.take_writer().expect("writer")));
-
-        let session = Arc::new(Session {
-            reader_control: super::super::unix_reader::UnixPtyReader::new(pair.master.as_ref())
-                .unwrap()
-                .1,
-            shell_pid: 0,
-            killer: Mutex::new(killer),
-            writer,
-            master: Arc::new(Mutex::new(Some(pair.master))),
-            output: Arc::new(OutputQueue::new()),
-            finished: Arc::new(AtomicBool::new(false)),
-        });
-
-        drop_session(session);
-    }
-}

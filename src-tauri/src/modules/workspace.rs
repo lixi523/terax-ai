@@ -206,11 +206,6 @@ fn is_usable_launch_dir(path: &Path) -> bool {
     if s.contains(".app/Contents/") {
         return false;
     }
-    // The AppImage mount (/tmp/.mount_*) is not a real working directory.
-    #[cfg(target_os = "linux")]
-    if std::env::var_os("APPDIR").is_some_and(|appdir| path.starts_with(&appdir)) {
-        return false;
-    }
     if cfg!(debug_assertions) && path.file_name().and_then(|s| s.to_str()) == Some("src-tauri") {
         return false;
     }
@@ -230,82 +225,8 @@ fn is_executable_dir(path: &Path) -> bool {
     }
 }
 
-#[cfg(target_os = "linux")]
-const APPIMAGE_PATH_VARS: &[&str] = &[
-    "LD_LIBRARY_PATH",
-    "PATH",
-    "XDG_DATA_DIRS",
-    "GST_PLUGIN_SYSTEM_PATH",
-    "GST_PLUGIN_SYSTEM_PATH_1_0",
-    "GST_PLUGIN_PATH",
-    "GI_TYPELIB_PATH",
-    "GDK_PIXBUF_MODULEDIR",
-    "GIO_MODULE_DIR",
-    "GSETTINGS_SCHEMA_DIR",
-];
-
-#[cfg(target_os = "linux")]
-const APPIMAGE_VALUE_VARS: &[&str] = &[
-    "GDK_PIXBUF_MODULE_FILE",
-    "LD_PRELOAD",
-    "FONTCONFIG_FILE",
-    "FONTCONFIG_PATH",
-];
-
-#[cfg(target_os = "linux")]
-const APPIMAGE_MARKER_VARS: &[&str] = &["APPDIR", "APPIMAGE", "ARGV0"];
-
 pub fn appimage_env_overrides() -> Vec<(&'static str, Option<OsString>)> {
-    #[cfg(target_os = "linux")]
-    {
-        let Some(appdir) = std::env::var_os("APPDIR") else {
-            return Vec::new();
-        };
-        compute_appimage_env_overrides(Path::new(&appdir), |k| std::env::var_os(k))
-    }
-    #[cfg(not(target_os = "linux"))]
-    {
-        Vec::new()
-    }
-}
-
-#[cfg(target_os = "linux")]
-fn compute_appimage_env_overrides(
-    appdir: &Path,
-    read: impl Fn(&str) -> Option<OsString>,
-) -> Vec<(&'static str, Option<OsString>)> {
-    let mut out = Vec::new();
-
-    for &key in APPIMAGE_PATH_VARS {
-        let Some(val) = read(key) else { continue };
-        let original: Vec<PathBuf> = std::env::split_paths(&val).collect();
-        let kept: Vec<PathBuf> = original
-            .iter()
-            .filter(|p| !p.as_os_str().is_empty() && !p.starts_with(appdir))
-            .cloned()
-            .collect();
-        if kept.len() == original.len() {
-            continue; // nothing AppImage-injected; leave as-is
-        }
-        match std::env::join_paths(&kept) {
-            Ok(joined) if !kept.is_empty() => out.push((key, Some(joined))),
-            _ => out.push((key, None)),
-        }
-    }
-
-    for &key in APPIMAGE_VALUE_VARS {
-        if read(key).is_some_and(|v| Path::new(&v).starts_with(appdir)) {
-            out.push((key, None));
-        }
-    }
-
-    for &key in APPIMAGE_MARKER_VARS {
-        if read(key).is_some() {
-            out.push((key, None));
-        }
-    }
-
-    out
+    Vec::new()
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]
@@ -335,7 +256,6 @@ pub struct WslDistro {
     pub running: bool,
 }
 
-#[cfg(windows)]
 pub fn resolve_path(path: &str, workspace: &WorkspaceEnv) -> PathBuf {
     match workspace {
         WorkspaceEnv::Local => PathBuf::from(path),
@@ -343,16 +263,10 @@ pub fn resolve_path(path: &str, workspace: &WorkspaceEnv) -> PathBuf {
     }
 }
 
-#[cfg(not(windows))]
-pub fn resolve_path(path: &str, _workspace: &WorkspaceEnv) -> PathBuf {
-    PathBuf::from(path)
-}
-
 /// True for WSL distro names safe to splice into a UNC path. Real WSL distros
 /// are alphanumeric with `.`, `_`, `-` separators (e.g. `Ubuntu-22.04`). Reject
 /// anything that could traverse out of the `\\wsl.localhost\<distro>\` prefix
 /// (`..`, `\`, `/`, `:`, `?`, `*`, control bytes) or empty names.
-#[cfg(windows)]
 fn is_safe_distro_name(name: &str) -> bool {
     if name.is_empty() || name.len() > 255 {
         return false;
@@ -365,7 +279,6 @@ fn is_safe_distro_name(name: &str) -> bool {
         && !name.contains("..")
 }
 
-#[cfg(windows)]
 pub(crate) fn validate_wsl_distro_name(distro: &str) -> Result<(), String> {
     if is_safe_distro_name(distro) {
         Ok(())
@@ -374,7 +287,6 @@ pub(crate) fn validate_wsl_distro_name(distro: &str) -> Result<(), String> {
     }
 }
 
-#[cfg(windows)]
 fn wsl_drvfs_to_windows(path: &str) -> Option<PathBuf> {
     let normalized = path.replace('\\', "/");
     let rest = normalized.strip_prefix("/mnt/")?;
@@ -395,7 +307,6 @@ fn wsl_drvfs_to_windows(path: &str) -> Option<PathBuf> {
     Some(PathBuf::from(host))
 }
 
-#[cfg(windows)]
 pub fn wsl_path_to_unc(distro: &str, path: &str) -> PathBuf {
     // Defense-in-depth: refuse to construct a UNC path with a distro name that
     // could escape the WSL share root via `..`, `\`, or other path metachars.
@@ -419,7 +330,6 @@ pub fn wsl_path_to_unc(distro: &str, path: &str) -> PathBuf {
     PathBuf::from(format!(r"\\wsl$\{}\{}", distro, trimmed.replace('/', r"\")))
 }
 
-#[cfg(windows)]
 pub fn wsl_path_to_host(distro: &str, path: &str) -> PathBuf {
     // `/mnt/<drive>` is drvfs-backed Windows storage. Accessing it through the
     // WSL UNC share can return "Access is denied" on Windows even though the
@@ -427,7 +337,6 @@ pub fn wsl_path_to_host(distro: &str, path: &str) -> PathBuf {
     wsl_drvfs_to_windows(path).unwrap_or_else(|| wsl_path_to_unc(distro, path))
 }
 
-#[cfg(windows)]
 pub fn decode_command_output(bytes: &[u8]) -> String {
     if bytes.starts_with(&[0xff, 0xfe]) || looks_utf16le(bytes) {
         let start = if bytes.starts_with(&[0xff, 0xfe]) {
@@ -445,7 +354,6 @@ pub fn decode_command_output(bytes: &[u8]) -> String {
     }
 }
 
-#[cfg(windows)]
 fn looks_utf16le(bytes: &[u8]) -> bool {
     if bytes.len() < 4 || !bytes.len().is_multiple_of(2) {
         return false;
@@ -454,7 +362,6 @@ fn looks_utf16le(bytes: &[u8]) -> bool {
     nul_odd * 2 >= bytes.len() / 2
 }
 
-#[cfg(windows)]
 fn run_wsl(args: &[&str]) -> Result<String, String> {
     let mut cmd = std::process::Command::new("wsl.exe");
     cmd.args(args);
@@ -467,7 +374,6 @@ fn run_wsl(args: &[&str]) -> Result<String, String> {
     Ok(decode_command_output(&out.stdout))
 }
 
-#[cfg(windows)]
 pub(crate) fn wsl_exec_capture(
     distro: &str,
     program: &str,
@@ -489,14 +395,12 @@ pub(crate) fn wsl_exec_capture(
     Ok(decode_command_output(&out.stdout))
 }
 
-#[cfg(windows)]
 fn run_wsl_sh(distro: &str, script: &str) -> Result<String, String> {
     // Probe helpers must avoid login-shell startup files. User `.profile`
     // output on stdout would corrupt the parsed value (`$HOME`, login shell).
     wsl_exec_capture(distro, "sh", &["-c", script])
 }
 
-#[cfg(windows)]
 pub(crate) fn normalize_wsl_value(output: String, fallback: &str) -> String {
     let value = output
         .lines()
@@ -511,7 +415,6 @@ pub(crate) fn normalize_wsl_value(output: String, fallback: &str) -> String {
     }
 }
 
-#[cfg(windows)]
 fn list_distros_blocking() -> Result<Vec<WslDistro>, String> {
     let out = run_wsl(&["--list", "--verbose"])?;
     let mut distros = Vec::new();
@@ -540,59 +443,36 @@ fn list_distros_blocking() -> Result<Vec<WslDistro>, String> {
 
 #[tauri::command]
 pub async fn wsl_list_distros() -> Result<Vec<WslDistro>, String> {
-    #[cfg(not(windows))]
-    {
-        Ok(Vec::new())
-    }
-    #[cfg(windows)]
-    {
-        tauri::async_runtime::spawn_blocking(list_distros_blocking)
-            .await
-            .map_err(|e| e.to_string())?
-    }
+    tauri::async_runtime::spawn_blocking(list_distros_blocking)
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
 pub async fn wsl_default_distro() -> Result<Option<String>, String> {
-    #[cfg(not(windows))]
-    {
-        Ok(None)
-    }
-    #[cfg(windows)]
-    {
-        tauri::async_runtime::spawn_blocking(|| {
-            let distros = list_distros_blocking()?;
-            Ok(distros
-                .iter()
-                .find(|d| d.default)
-                .map(|d| d.name.clone())
-                .or_else(|| distros.first().map(|d| d.name.clone())))
-        })
-        .await
-        .map_err(|e| e.to_string())?
-    }
+    tauri::async_runtime::spawn_blocking(|| {
+        let distros = list_distros_blocking()?;
+        Ok(distros
+            .iter()
+            .find(|d| d.default)
+            .map(|d| d.name.clone())
+            .or_else(|| distros.first().map(|d| d.name.clone())))
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
 pub fn wsl_home(distro: String) -> Result<String, String> {
-    #[cfg(not(windows))]
-    {
-        let _ = distro;
-        Err("WSL is only available on Windows".into())
-    }
-    #[cfg(windows)]
-    {
-        let out = run_wsl_sh(&distro, "printf %s \"$HOME\"")?;
-        let home = normalize_wsl_value(out, "");
-        if home.is_empty() {
-            Err(format!("could not resolve WSL home for {distro}"))
-        } else {
-            Ok(home)
-        }
+    let out = run_wsl_sh(&distro, "printf %s \"$HOME\"")?;
+    let home = normalize_wsl_value(out, "");
+    if home.is_empty() {
+        Err(format!("could not resolve WSL home for {distro}"))
+    } else {
+        Ok(home)
     }
 }
 
-#[cfg(windows)]
 pub fn wsl_login_shell(distro: String) -> Result<String, String> {
     const SCRIPT: &str = r#"uid="$(id -u 2>/dev/null || printf '')"
 entry=''
@@ -618,7 +498,7 @@ printf %s "$shell""#;
     Ok(normalize_wsl_value(out, "/bin/sh"))
 }
 
-#[cfg(all(test, windows))]
+#[cfg(test)]
 mod tests {
     use super::*;
 
@@ -902,9 +782,6 @@ mod auth_tests {
         let allowed = tempdir("symroot");
         let outside = tempdir("symtarget");
         let link = allowed.join("escape");
-        #[cfg(unix)]
-        std::os::unix::fs::symlink(&outside, &link).expect("symlink");
-        #[cfg(windows)]
         std::os::windows::fs::symlink_dir(&outside, &link).expect("symlink");
         let reg = WorkspaceRegistry::default();
         reg.authorize(&allowed).expect("authorize root");
@@ -934,68 +811,5 @@ mod auth_tests {
         let env = tempdir("envfb");
         let resolved = resolve_launch_cwd(Some("/no/such/terax/dir"), Some(env.clone()));
         assert_eq!(resolved, Some(env));
-    }
-}
-
-#[cfg(all(test, target_os = "linux"))]
-mod appimage_tests {
-    use super::*;
-    use std::collections::HashMap;
-
-    fn reader(pairs: &[(&str, &str)]) -> impl Fn(&str) -> Option<OsString> {
-        let map: HashMap<String, OsString> = pairs
-            .iter()
-            .map(|(k, v)| (k.to_string(), OsString::from(v)))
-            .collect();
-        move |k: &str| map.get(k).cloned()
-    }
-
-    fn find<'a>(
-        out: &'a [(&'static str, Option<OsString>)],
-        key: &str,
-    ) -> Option<&'a Option<OsString>> {
-        out.iter().find(|(k, _)| *k == key).map(|(_, v)| v)
-    }
-
-    #[test]
-    fn strips_appdir_from_path_lists_and_unsets_when_empty() {
-        let appdir = Path::new("/tmp/.mount_Terax_X");
-        let env = reader(&[
-            ("LD_LIBRARY_PATH", "/tmp/.mount_Terax_X/usr/lib:/usr/lib"),
-            ("PATH", "/tmp/.mount_Terax_X/usr/bin:/usr/bin:/bin"),
-            ("GST_PLUGIN_SYSTEM_PATH", "/tmp/.mount_Terax_X/usr/lib/gstreamer-1.0"),
-            ("APPDIR", "/tmp/.mount_Terax_X"),
-        ]);
-        let out = compute_appimage_env_overrides(appdir, env);
-
-        assert_eq!(find(&out, "LD_LIBRARY_PATH"), Some(&Some(OsString::from("/usr/lib"))));
-        assert_eq!(find(&out, "PATH"), Some(&Some(OsString::from("/usr/bin:/bin"))));
-        // Only an APPDIR entry, so the var is removed entirely.
-        assert_eq!(find(&out, "GST_PLUGIN_SYSTEM_PATH"), Some(&None));
-        assert_eq!(find(&out, "APPDIR"), Some(&None));
-    }
-
-    #[test]
-    fn leaves_untouched_vars_alone() {
-        let appdir = Path::new("/tmp/.mount_Terax_X");
-        let env = reader(&[
-            ("LD_LIBRARY_PATH", "/usr/lib:/usr/local/lib"),
-            ("LD_PRELOAD", "/home/u/my.so"),
-        ]);
-        let out = compute_appimage_env_overrides(appdir, env);
-
-        // No APPDIR component => no override emitted for these.
-        assert!(find(&out, "LD_LIBRARY_PATH").is_none());
-        assert!(find(&out, "LD_PRELOAD").is_none());
-    }
-
-    #[test]
-    fn unsets_value_vars_only_when_pointing_into_appdir() {
-        let appdir = Path::new("/tmp/.mount_Terax_X");
-        let into = reader(&[("LD_PRELOAD", "/tmp/.mount_Terax_X/usr/lib/x.so")]);
-        assert_eq!(find(&compute_appimage_env_overrides(appdir, into), "LD_PRELOAD"), Some(&None));
-
-        let outside = reader(&[("FONTCONFIG_FILE", "/etc/fonts/fonts.conf")]);
-        assert!(find(&compute_appimage_env_overrides(appdir, outside), "FONTCONFIG_FILE").is_none());
     }
 }

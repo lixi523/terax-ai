@@ -15,7 +15,6 @@ use serde::Serialize;
 use shared_child::SharedChild;
 
 use crate::modules::workspace::{authorize_spawn_cwd, WorkspaceEnv, WorkspaceRegistry};
-#[cfg(windows)]
 use crate::modules::workspace::validate_wsl_distro_name;
 
 use background::{BackgroundLogResponse, BackgroundProc, BackgroundProcInfo};
@@ -283,10 +282,9 @@ pub fn shell_bg_list(state: tauri::State<ShellState>) -> Result<Vec<BackgroundPr
 
 pub(crate) fn build_oneshot_command(
     command: &str,
-    #[cfg_attr(not(windows), allow(unused_variables))] workspace: &WorkspaceEnv,
-    #[cfg_attr(not(windows), allow(unused_variables))] cwd: Option<&str>,
+    workspace: &WorkspaceEnv,
+    cwd: Option<&str>,
 ) -> Result<Command, String> {
-    #[cfg(windows)]
     if let WorkspaceEnv::Wsl { distro } = workspace {
         validate_wsl_distro_name(distro)?;
         let mut cmd = Command::new("wsl.exe");
@@ -297,38 +295,19 @@ pub(crate) fn build_oneshot_command(
         cmd.arg("--exec").arg("sh").arg("-lc").arg(command);
         return Ok(cmd);
     }
-    #[cfg(unix)]
-    {
-        let mut cmd = Command::new("/bin/sh");
-        cmd.arg("-c").arg(command);
-        for (key, value) in crate::modules::workspace::appimage_env_overrides() {
-            match value {
-                Some(v) => {
-                    cmd.env(key, v);
-                }
-                None => {
-                    cmd.env_remove(key);
-                }
-            }
-        }
-        Ok(cmd)
+    let shell = crate::modules::pty::shell_init::windows_shell_path();
+    let mut cmd = Command::new(&shell);
+    let is_cmd = shell
+        .file_name()
+        .and_then(|s| s.to_str())
+        .map(|s| s.eq_ignore_ascii_case("cmd.exe"))
+        .unwrap_or(false);
+    if is_cmd {
+        cmd.arg("/C").arg(command);
+    } else {
+        cmd.arg("-NoProfile").arg("-Command").arg(command);
     }
-    #[cfg(windows)]
-    {
-        let shell = crate::modules::pty::shell_init::windows_shell_path();
-        let mut cmd = Command::new(&shell);
-        let is_cmd = shell
-            .file_name()
-            .and_then(|s| s.to_str())
-            .map(|s| s.eq_ignore_ascii_case("cmd.exe"))
-            .unwrap_or(false);
-        if is_cmd {
-            cmd.arg("/C").arg(command);
-        } else {
-            cmd.arg("-NoProfile").arg("-Command").arg(command);
-        }
-        Ok(cmd)
-    }
+    Ok(cmd)
 }
 
 fn drain<R: Read>(reader: &mut R) -> (Vec<u8>, bool) {
@@ -355,56 +334,3 @@ fn drain<R: Read>(reader: &mut R) -> (Vec<u8>, bool) {
     (out, truncated)
 }
 
-#[cfg(all(test, unix))]
-mod tests {
-    use super::*;
-
-    fn run(cmd: &str, timeout_secs: u64) -> CommandOutput {
-        run_blocking_inner(
-            cmd.into(),
-            None,
-            WorkspaceEnv::Local,
-            Duration::from_secs(timeout_secs),
-        )
-        .expect("run")
-    }
-
-    #[test]
-    fn run_blocking_captures_stdout_and_zero_exit() {
-        let out = run("printf 'hello\\n'", 5);
-        assert_eq!(out.stdout, "hello\n");
-        assert_eq!(out.exit_code, Some(0));
-        assert!(!out.timed_out);
-        assert!(!out.truncated);
-    }
-
-    #[test]
-    fn run_blocking_captures_stderr_and_nonzero_exit() {
-        let out = run("printf 'oops\\n' >&2; exit 3", 5);
-        assert!(out.stderr.contains("oops"));
-        assert_eq!(out.exit_code, Some(3));
-    }
-
-    #[test]
-    fn run_blocking_times_out_long_running_command() {
-        let out = run("sleep 10", 1);
-        assert!(out.timed_out);
-        assert_eq!(out.exit_code, None);
-    }
-
-    #[test]
-    fn run_blocking_truncates_huge_output() {
-        let big = MAX_OUTPUT_BYTES + 4096;
-        let out = run(&format!("head -c {big} /dev/zero"), 10);
-        assert!(out.truncated);
-        assert!(out.stdout.len() <= MAX_OUTPUT_BYTES);
-    }
-
-    #[test]
-    fn build_oneshot_command_uses_sh_minus_c_on_unix() {
-        let cmd = build_oneshot_command("echo hi", &WorkspaceEnv::Local, None).unwrap();
-        assert_eq!(cmd.get_program(), "/bin/sh");
-        let args: Vec<_> = cmd.get_args().collect();
-        assert_eq!(args, vec!["-c", "echo hi"]);
-    }
-}

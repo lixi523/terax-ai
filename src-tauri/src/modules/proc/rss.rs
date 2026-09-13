@@ -1,34 +1,3 @@
-#[cfg(target_os = "macos")]
-pub fn rss_bytes(pid: u32) -> Option<u64> {
-    let mut info = std::mem::MaybeUninit::<libc::proc_taskinfo>::uninit();
-    let size = std::mem::size_of::<libc::proc_taskinfo>() as libc::c_int;
-    let written = unsafe {
-        libc::proc_pidinfo(
-            pid as libc::c_int,
-            libc::PROC_PIDTASKINFO,
-            0,
-            info.as_mut_ptr().cast(),
-            size,
-        )
-    };
-    if written != size {
-        return None;
-    }
-    Some(unsafe { info.assume_init() }.pti_resident_size)
-}
-
-#[cfg(target_os = "linux")]
-pub fn rss_bytes(pid: u32) -> Option<u64> {
-    let statm = std::fs::read_to_string(format!("/proc/{pid}/statm")).ok()?;
-    let pages: u64 = statm.split_whitespace().nth(1)?.parse().ok()?;
-    let page_size = unsafe { libc::sysconf(libc::_SC_PAGESIZE) };
-    if page_size <= 0 {
-        return None;
-    }
-    Some(pages * page_size as u64)
-}
-
-#[cfg(windows)]
 pub fn rss_bytes(pid: u32) -> Option<u64> {
     use windows_sys::Win32::Foundation::CloseHandle;
     use windows_sys::Win32::System::ProcessStatus::{
