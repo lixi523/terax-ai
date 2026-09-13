@@ -1,12 +1,18 @@
 import type i18next from 'i18next';
 import LanguageDetector from 'i18next-browser-languagedetector';
 
+// Lazy: this module is imported outside the browser too (node-env tests),
+// where `document` does not exist.
+const hasDom = () => typeof document !== 'undefined';
+
 const DETECTOR_OPTIONS = {
   order: ['settingsStore', 'localStorage', 'navigator', 'htmlTag'],
   caches: ['localStorage'],
   lookupLocalStorage: 'terax:locale',
   lookupCookie: 'terax:locale',
-  htmlTag: document.documentElement,
+  get htmlTag() {
+    return hasDom() ? document.documentElement : undefined;
+  },
 };
 
 export async function initLanguageDetector(i18n: typeof i18next): Promise<void> {

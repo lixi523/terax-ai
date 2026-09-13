@@ -1,6 +1,8 @@
 import type { SearchTarget } from "@/modules/header";
 import { MAX_PANES_PER_TAB, type Tab } from "@/modules/tabs";
-import { leafIds } from "@/modules/terminal";
+// Direct import: the terminal barrel also re-exports TerminalPane, whose
+// module graph touches `document` at load time and breaks node-env tests.
+import { leafIds } from "@/modules/terminal/lib/panes";
 import {
   Cancel01Icon,
   DashboardSquare01Icon,
