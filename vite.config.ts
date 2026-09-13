@@ -1,6 +1,5 @@
-import babel from "@rolldown/plugin-babel";
 import tailwindcss from "@tailwindcss/vite";
-import react, { reactCompilerPreset } from "@vitejs/plugin-react";
+import react from "@vitejs/plugin-react";
 import path from "node:path";
 import { defineConfig, type PluginOption, type UserConfig } from "vite";
 import Inspect from "vite-plugin-inspect";
@@ -18,9 +17,6 @@ const inspectGraph = process.env.INSPECT === "true";
 // https://vite.dev/config/
 export default defineConfig(async ({ mode }): Promise<UserConfig> => ({
   plugins: [
-    babel({
-      presets: [reactCompilerPreset({ target: "19" })],
-    }),
     react(),
     tailwindcss(),
     // Module-graph inspector at /__inspect (who-imports-what, per-plugin
