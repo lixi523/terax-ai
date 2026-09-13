@@ -95,6 +95,11 @@ export default defineConfig(async ({ mode }): Promise<UserConfig> => ({
 
           // Each AI provider SDK in its own chunk so unused providers
           // don't bloat the initial load (lazy-imported in agent.ts).
+          // @ai-sdk/react must stay in the react chunk: it depends on react,
+          // and splitting it recreated a chunk cycle that made rolldown emit
+          // a second copy of the React runtime (settings window crashed with
+          // React error #300 and went blank after first paint).
+          if (id.includes("@ai-sdk/react")) return "react";
           if (id.includes("@ai-sdk/anthropic")) return "ai-anthropic";
           if (id.includes("@ai-sdk/google")) return "ai-google";
           if (id.includes("@ai-sdk/openai-compatible"))
