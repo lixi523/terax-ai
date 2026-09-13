@@ -111,7 +111,7 @@ async fn open_settings_window(app: tauri::AppHandle, tab: Option<String>) -> Res
     // transparent.
     let builder = builder.decorations(false).transparent(true);
 
-    let window = builder.build().map_err(|e| e.to_string())?;
+    builder.build().map_err(|e| e.to_string())?;
 
     Ok(())
 }
@@ -282,18 +282,15 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|app, event| {
-            match event {
-                // Servers exit on stdin EOF, but destructors are not guaranteed
-                // on process exit; kill explicitly.
-                tauri::RunEvent::Exit => {
-                    if let Some(state) = app.try_state::<lsp::LspState>() {
-                        state.kill_all();
-                    }
-                    if let Some(state) = app.try_state::<control::ControlState>() {
-                        state.shutdown();
-                    }
+            // Servers exit on stdin EOF, but destructors are not guaranteed
+            // on process exit; kill explicitly.
+            if let tauri::RunEvent::Exit = event {
+                if let Some(state) = app.try_state::<lsp::LspState>() {
+                    state.kill_all();
                 }
-                _ => {}
+                if let Some(state) = app.try_state::<control::ControlState>() {
+                    state.shutdown();
+                }
             }
         });
 }

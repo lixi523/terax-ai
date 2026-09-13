@@ -1,4 +1,4 @@
-import i18next from 'i18next';
+import type i18next from 'i18next';
 import LanguageDetector from 'i18next-browser-languagedetector';
 
 const DETECTOR_OPTIONS = {

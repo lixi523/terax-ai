@@ -10,6 +10,8 @@ pub struct PresentationSnapshot {
 }
 
 impl PresentationSnapshot {
+    // Only exercised by tests for now; the state currently just reports.
+    #[allow(dead_code)]
     fn update(&mut self, occluded: Option<bool>, sleeping: Option<bool>) -> Option<Self> {
         let occluded = occluded.unwrap_or(self.occluded);
         let sleeping = sleeping.unwrap_or(self.sleeping);

@@ -121,7 +121,16 @@ fn replace_file(from: &Path, to: &Path) -> io::Result<()> {
 
 fn remove_path(path: &Path) -> io::Result<()> {
     let metadata = std::fs::symlink_metadata(path)?;
-    if metadata.is_dir() {
+    let file_type = metadata.file_type();
+    // Delete the link itself, never recurse through it into the target.
+    if file_type.is_symlink() {
+        // Windows: a directory symlink/junction must go through
+        // RemoveDirectoryW (DeleteFileW fails with ACCESS_DENIED), a file
+        // symlink through DeleteFileW. FileType::is_dir() is false for any
+        // symlink, so probe with remove_dir and fall back. On Unix symlinks
+        // are always removed with remove_file.
+        std::fs::remove_dir(path).or_else(|_| std::fs::remove_file(path))
+    } else if file_type.is_dir() {
         std::fs::remove_dir_all(path)
     } else {
         std::fs::remove_file(path)
